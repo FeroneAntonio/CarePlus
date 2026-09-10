@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 
 struct CareLinkDTO: Codable, Sendable {
+    let id: String
     let caregiver_id: String
     let patient_id: String
     let status: String
@@ -15,19 +16,17 @@ final class CareLinksService {
 
     private var client: SupabaseClient { SupabaseClientProvider.shared.client }
 
-    // Crea link (patient crea link verso caregiverId) - status "active" in demo
-    func createLink(patientId: String, caregiverId: String, status: String = "active") async throws {
-        struct Insert: Encodable {
-            let patient_id: String
-            let caregiver_id: String
-            let status: String
-        }
-
-        let payload = Insert(patient_id: patientId, caregiver_id: caregiverId, status: status)
-
+    /// The first account requests a link; the counterpart confirms it by requesting
+    /// the same pair from their own authenticated account.
+    func requestLink(patientId: String, caregiverId: String) async throws {
         _ = try await client.database
-            .from("care_links")
-            .insert(payload)
+            .rpc(
+                "request_care_link",
+                params: [
+                    "p_patient_id": patientId,
+                    "p_caregiver_id": caregiverId
+                ]
+            )
             .execute()
     }
 

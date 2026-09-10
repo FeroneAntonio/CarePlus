@@ -4,15 +4,13 @@
 //
 
 import SwiftUI
-import AuthenticationServices
 
 struct AuthLandingView: View {
     @Bindable var state: AppState
 
     @State private var showLogin = false
     @State private var showSignUpFlow = false
-    @StateObject private var appleAuth = AppleSignInCoordinator()
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var providerNotice: String?
 
     var body: some View {
         Screen {
@@ -83,26 +81,12 @@ struct AuthLandingView: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .padding(.top, 6)
 
-                    // ✅ Sign in with Apple
-                    SignInWithAppleButton(.signUp) { request in
-                        appleAuth.configure(request: request)
-                    } onCompletion: { result in
-                        appleAuth.handle(result: result) { profile in
-                            state.currentUser = profile
-                            state.saveUser()
-                        }
+                    providerButton(title: "Sign in with Apple", systemImage: "apple.logo") {
+                        providerNotice = "Apple sign-in is not connected to the CarePlus backend yet. Use email login for this build."
                     }
-                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                    .frame(height: 52)
-                    .clipShape(Capsule())
 
-                    // ✅ Google
-                    GoogleButton {
-                        signInWithGoogle { profile in
-                            guard let profile else { return }
-                            state.currentUser = profile
-                            state.saveUser()
-                        }
+                    providerButton(title: "Sign in with Google", systemImage: "g.circle.fill") {
+                        providerNotice = "Google sign-in is not configured yet. Use email login for this build."
                     }
                 }
                 .padding(.horizontal, 28)
@@ -126,6 +110,33 @@ struct AuthLandingView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .alert("Sign-in option unavailable", isPresented: Binding(
+            get: { providerNotice != nil },
+            set: { if !$0 { providerNotice = nil } }
+        )) {
+            Button("OK", role: .cancel) { providerNotice = nil }
+        } message: {
+            Text(providerNotice ?? "")
+        }
+    }
+
+    private func providerButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                Text(title)
+                    .font(.headline)
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(.white)
+            .clipShape(Capsule())
+        }
+        .accessibilityHint("Not configured in this build")
     }
 }
 

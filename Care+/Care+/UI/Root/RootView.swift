@@ -8,11 +8,12 @@ struct RootView: View {
             if state.currentUser == nil && !state.isGuest {
                 AuthLandingView(state: state)
 
-            // 🔒 BLOCCO TEMP: salta scelta ruolo + setup wizard + server gating
-            } else if state.bloccoScelta {
-                MainTabView(state: state)
+            } else if !state.isGuest && state.userRole == nil {
+                NavigationStack {
+                    RoleChoiceView()
+                }
+                .environment(state)
 
-            // ⬇️ Flusso normale (quando disattivi bloccoScelta)
             } else if state.needsSetupWizard {
                 NavigationStack {
                     SetupWizardView()
@@ -28,10 +29,6 @@ struct RootView: View {
             } else {
                 MainTabView(state: state)
             }
-        }
-        .onAppear {
-            state.load()
-            NotificationManager.requestAuthorization()
         }
     }
 }

@@ -2,8 +2,24 @@ import Foundation
 import Supabase
 
 enum SupabaseConfig {
-    static let url = URL(string: "https://dtlpfujnckiclianzhmo.supabase.co")!
-    static let anonKey = "sb_publishable_tRD2QP3aq9nlq7Rze_xSpQ_O48lAT8a"
+    static let url: URL = {
+        guard let url = URL(string: requiredValue(named: "SUPABASE_URL")) else {
+            preconditionFailure("SUPABASE_URL is not a valid URL")
+        }
+        return url
+    }()
+
+    static let anonKey = requiredValue(named: "SUPABASE_PUBLISHABLE_KEY")
+
+    private static func requiredValue(named key: String) -> String {
+        let environmentValue = ProcessInfo.processInfo.environment[key]
+        let plistValue = Bundle.main.object(forInfoDictionaryKey: key) as? String
+        let value = (environmentValue ?? plistValue ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        precondition(!value.isEmpty, "Configure \(key) in the Xcode scheme or Info.plist")
+        return value
+    }
 }
 
 final class SupabaseClientProvider {

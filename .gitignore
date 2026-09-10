@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Xcode user state and build products
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager local state
+.build/
+.swiftpm/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+Secrets.xcconfig
+GoogleService-Info.plist
+
+# Editor files
+.idea/
+.vscode/
+*~

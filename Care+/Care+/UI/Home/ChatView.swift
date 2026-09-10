@@ -42,9 +42,14 @@ struct ChatView: View {
 
                     Spacer()
 
-                    Text("Chat")
-                        .font(.headline)
-                        .foregroundStyle(AppTheme.textPrimary)
+                    VStack(spacing: 1) {
+                        Text("Chat")
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(vm.partnerName)
+                            .font(.caption2)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
 
                     Spacer()
 
@@ -59,7 +64,7 @@ struct ChatView: View {
                     Image(systemName: "person.2.fill")
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("You are chatting with your caregiver.")
+                    Text("Private conversation with \(vm.partnerName).")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AppTheme.textPrimary)
 
@@ -76,25 +81,49 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(vm.messages) { msg in
-                                ChatBubble(message: msg)
-                                    .id(msg.id)
+                ZStack {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(vm.messages) { msg in
+                                    ChatBubble(message: msg)
+                                        .id(msg.id)
+                                }
                             }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, composerHeight + 20)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, composerHeight + 20)
+                        .scrollDismissesKeyboard(.interactively)
+                        .onAppear {
+                            scrollProxy = proxy
+                            scrollToBottom(animated: false)
+                        }
+                        .onChange(of: vm.messages) { _ in
+                            scrollToBottom(animated: true)
+                        }
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onAppear {
-                        scrollProxy = proxy
-                        scrollToBottom(animated: false)
-                    }
-                    .onChange(of: vm.messages) { _ in
-                        scrollToBottom(animated: true)
+
+                    if vm.isLoading {
+                        ProgressView("Loading conversation…")
+                            .foregroundStyle(AppTheme.textSecondary)
+                    } else if let error = vm.errorMessage, vm.messages.isEmpty {
+                        ContentUnavailableView {
+                            Label("Chat unavailable", systemImage: "exclamationmark.bubble")
+                        } description: {
+                            Text(error)
+                        } actions: {
+                            Button("Try again") {
+                                Task { await vm.retry(state: state) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    } else if vm.messages.isEmpty {
+                        ContentUnavailableView(
+                            "No messages yet",
+                            systemImage: "bubble.left.and.bubble.right",
+                            description: Text("Send the first message to \(vm.partnerName).")
+                        )
                     }
                 }
             }
@@ -111,17 +140,26 @@ struct ChatView: View {
                     .background(AppTheme.surface)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-                Button(action: vm.send) {
-                    Text("Send")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 16)
-                        .frame(height: 44)
-                        .background(AppTheme.primary)
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .clipShape(Capsule())
+                Button {
+                    Task { await vm.send() }
+                } label: {
+                    Group {
+                        if vm.isSending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(.headline.weight(.bold))
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.primary)
+                    .foregroundStyle(.white)
+                    .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .disabled(vm.draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!vm.canSend)
+                .opacity(vm.canSend ? 1 : 0.45)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -140,6 +178,12 @@ struct ChatView: View {
                 Spacer()
                 Button("Done") { dismissKeyboard() }
             }
+        }
+        .task {
+            await vm.start(state: state)
+        }
+        .onDisappear {
+            vm.stop()
         }
     }
 

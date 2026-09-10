@@ -29,6 +29,10 @@ struct CaregiverSetupView: View {
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+
+                Text("For privacy, the connection activates only after the patient enters your email from their account.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Button {
@@ -47,6 +51,8 @@ struct CaregiverSetupView: View {
 
     @MainActor
     private func submitAsync() async {
+        guard !isSubmitting else { return }
+        error = nil
         guard let session = await AuthService.shared.currentSession() else {
             error = "Not authenticated"
             return
@@ -60,8 +66,8 @@ struct CaregiverSetupView: View {
         }
 
         let email = patientEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !email.isEmpty else {
-            error = "Enter patient email"
+        guard Validators.isValidEmail(email) else {
+            error = "Enter a valid patient email"
             return
         }
 
@@ -71,23 +77,26 @@ struct CaregiverSetupView: View {
         do {
             // 1) Save caregiver details
             try await DetailsService.shared.upsertCaregiverDetails(
-                fullName: fullName,
-                phone: phone.isEmpty ? nil : phone,
-                relationship: relationship.isEmpty ? nil : relationship
+                fullName: fullName.trimmingCharacters(in: .whitespacesAndNewlines),
+                phone: phone.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                relationship: relationship.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             )
 
             // 2) Resolve patient id by email via RPC
-            let patientId = try await ProfilesService.shared.getProfileIdByEmail(email)
-            guard let patientId else {
+            let patient = try await ProfilesService.shared.findProfile(byEmail: email)
+            guard let patient else {
                 error = "Patient not found"
                 return
             }
+            guard patient.role?.lowercased() == "patient" else {
+                error = "That account is not registered as a patient"
+                return
+            }
 
-            // 3) Create care link
-            try await CareLinksService.shared.createLink(
-                patientId: patientId,
-                caregiverId: caregiverId,
-                status: "active"
+            // 3) Request care link (the patient confirms from their account)
+            try await CareLinksService.shared.requestLink(
+                patientId: patient.id,
+                caregiverId: caregiverId
             )
 
             // 4) Activate profile
@@ -104,16 +113,20 @@ struct CaregiverSetupView: View {
         guard let session = await AuthService.shared.currentSession() else { return }
         let userId = session.user.id.uuidString
 
-        struct Upsert: Encodable {
-            let id: String
+        struct StatusUpdate: Encodable {
             let status: String
         }
 
-        let payload = Upsert(id: userId, status: "active")
+        let payload = StatusUpdate(status: "active")
 
         _ = try await SupabaseClientProvider.shared.client.database
             .from("profiles")
-            .upsert(payload, onConflict: "id")
+            .update(payload)
+            .eq("id", value: userId)
             .execute()
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

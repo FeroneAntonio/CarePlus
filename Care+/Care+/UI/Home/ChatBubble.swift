@@ -4,7 +4,7 @@ struct ChatBubble: View {
     let message: ChatMessage
     @Environment(\.colorScheme) private var scheme
 
-    private var isUser: Bool { message.sender == .user }
+    private var isUser: Bool { message.isFromCurrentUser }
 
     var body: some View {
         HStack(alignment: .bottom) {
@@ -35,8 +35,8 @@ struct ChatBubble: View {
 
 #Preview {
     VStack(spacing: 12) {
-        ChatBubble(message: ChatMessage(sender: .caregiver, text: "Messaggio di prova del caregiver"))
-        ChatBubble(message: ChatMessage(sender: .user, text: "Risposta dell'utente"))
+        ChatBubble(message: ChatMessage(senderId: "caregiver", text: "Messaggio di prova del caregiver", isFromCurrentUser: false))
+        ChatBubble(message: ChatMessage(senderId: "patient", text: "Risposta dell'utente", isFromCurrentUser: true))
     }
     .padding()
 }

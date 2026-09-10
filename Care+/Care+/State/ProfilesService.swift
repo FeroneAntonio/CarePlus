@@ -17,6 +17,14 @@ struct ProfileUpsertDTO: Encodable, Sendable {
     let email: String?
 }
 
+struct ProfileLookupDTO: Decodable, Sendable {
+    let id: String
+    let role: String?
+    let status: String
+    let display_name: String?
+    let email: String?
+}
+
 @MainActor
 final class ProfilesService {
     static let shared = ProfilesService()
@@ -39,11 +47,40 @@ final class ProfilesService {
         return rows.first
     }
 
+    func fetchProfile(id: String) async throws -> ProfileRowDTO? {
+        let rows: [ProfileRowDTO] = try await client
+            .from("profiles")
+            .select()
+            .eq("id", value: id)
+            .limit(1)
+            .execute()
+            .value
+
+        return rows.first
+    }
+
     func upsertProfile(_ dto: ProfileUpsertDTO) async throws {
         _ = try await client
             .from("profiles")
             .upsert(dto, onConflict: "id")
             .execute()
+    }
+
+    func ensureProfile(displayName: String, email: String) async throws {
+        guard let session = await AuthService.shared.currentSession() else { return }
+        let existing = try await fetchProfile()
+
+        try await upsertProfile(ProfileUpsertDTO(
+            id: session.user.id.uuidString,
+            status: existing?.status ?? "pending",
+            role: existing?.role,
+            display_name: existing?.display_name?.isEmpty == false
+                ? existing?.display_name
+                : displayName,
+            email: existing?.email?.isEmpty == false
+                ? existing?.email
+                : email.lowercased()
+        ))
     }
 
     /// Set role only once (RoleChoiceView).
@@ -59,6 +96,13 @@ final class ProfilesService {
 
         let existing = try? await fetchProfile()
         if let existingRole = existing?.role, !existingRole.isEmpty {
+            guard existingRole == normalized else {
+                throw NSError(
+                    domain: "ProfilesService",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "This account is already registered as \(existingRole)."]
+                )
+            }
             return
         }
 
@@ -77,18 +121,13 @@ final class ProfilesService {
             .execute()
     }
 
-    // MARK: - RPC: resolve id by email safely (bypass RLS through SECURITY DEFINER)
+    // MARK: - RPC: look up a care partner without exposing the profiles table.
 
-    struct GetIdResponse: Decodable {
-        let id: String?
-    }
-
-    func getProfileIdByEmail(_ email: String) async throws -> String? {
-        // expects RPC: get_profile_id_by_email(email text) returns uuid
-        let res: [GetIdResponse] = try await client
-            .rpc("get_profile_id_by_email", params: ["p_email": email])
+    func findProfile(byEmail email: String) async throws -> ProfileLookupDTO? {
+        let res: [ProfileLookupDTO] = try await client
+            .rpc("find_care_profile_by_email", params: ["p_email": email.lowercased()])
             .execute()
             .value
-        return res.first?.id
+        return res.first
     }
 }

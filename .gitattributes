@@ -1,0 +1,11 @@
+* text=auto
+*.swift text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.plist text eol=lf
+*.pbxproj text eol=lf
+*.xcworkspacedata text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary

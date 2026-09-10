@@ -1,7 +1,22 @@
 import SwiftUI
 
 struct SignUpStep3WelcomeView: View {
+    let title: String
+    let message: String
+    let buttonTitle: String
     let onStart: () -> Void
+
+    init(
+        title: String = "Welcome!",
+        message: String = "Every memory matters.",
+        buttonTitle: String = "Start",
+        onStart: @escaping () -> Void
+    ) {
+        self.title = title
+        self.message = message
+        self.buttonTitle = buttonTitle
+        self.onStart = onStart
+    }
 
     var body: some View {
         VStack(spacing: 40) {
@@ -14,20 +29,21 @@ struct SignUpStep3WelcomeView: View {
                 .foregroundStyle(Color.accentColor)
             
             VStack(spacing: 8) {
-                Text("Welcome!")
+                Text(title)
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
                 
-                Text("You're all set.")
+                Text(message)
                     .font(.headline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
             
             Spacer()
             
             Button(action: onStart) {
-                Text("Start")
+                Text(buttonTitle)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

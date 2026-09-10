@@ -110,9 +110,6 @@ struct TasksTabView: View {
                 SettingsView(state: state)
             }
 
-            .onAppear {
-                NotificationManager.requestAuthorization()
-            }
             .alert("Delete this item?", isPresented: $showFirstDeleteConfirm) {
                 Button("Continue", role: .destructive) { showSecondDeleteConfirm = true }
                 Button("Cancel", role: .cancel) { taskToDelete = nil }
@@ -127,6 +124,7 @@ struct TasksTabView: View {
                         }
                         state.tasks.removeAll { $0.id == t.id }
                         state.saveTasks()
+                        Task { await SyncEngine.deleteTask(id: t.id, state: state) }
                     }
                     taskToDelete = nil
                 }

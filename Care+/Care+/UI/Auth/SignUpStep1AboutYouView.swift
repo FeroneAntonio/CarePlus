@@ -3,7 +3,6 @@ import SwiftUI
 struct SignUpStep1AboutYouView: View {
     @Binding var firstName: String
     @Binding var lastName: String
-    @Binding var phone: String
     @Binding var email: String
     @Binding var password: String
     var isLoading: Bool
@@ -53,13 +52,6 @@ struct SignUpStep1AboutYouView: View {
                     keyboardType: .default,
                     textContentType: .familyName,
                     autocapitalization: .words
-                )
-                SignUpRoundedTextField(
-                    title: "Phone number",
-                    text: $phone,
-                    keyboardType: .phonePad,
-                    textContentType: .telephoneNumber,
-                    autocapitalization: .never
                 )
                 SignUpRoundedTextField(
                     title: "Email",

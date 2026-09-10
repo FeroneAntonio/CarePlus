@@ -4,53 +4,79 @@ import Supabase
 enum SyncEngine {
     private static var pushTask: Task<Void, Never>?
 
-    // ✅ allineate con AppState
     private static let tasksKey = "tasks_v1"
     private static let diaryKey = "diary_v1"
 
     static func fullSync(state: AppState) async {
-        guard let uid = state.sessionUserId else { return }
+        guard let ownerId = state.careDataOwnerId ?? state.sessionUserId else { return }
 
-        // Local scoped
-        let localTasks = Persistence.load([TaskItem].self, key: tasksKey, userId: uid, defaultValue: [])
-        let localDiary = Persistence.load([DiaryEntry].self, key: diaryKey, userId: uid, defaultValue: [])
+        let localTasks = Persistence.load(
+            [TaskItem].self,
+            key: tasksKey,
+            userId: ownerId,
+            defaultValue: []
+        )
+        let localDiary = Persistence.load(
+            [DiaryEntry].self,
+            key: diaryKey,
+            userId: ownerId,
+            defaultValue: []
+        )
 
-        // Remote best-effort
+        struct RemoteRow: Decodable {
+            let payload: Data
+        }
+
         let client = SupabaseClientProvider.shared.client
         var remoteTasks: [TaskItem] = []
         var remoteDiary: [DiaryEntry] = []
 
         do {
-            remoteTasks = try await client.database
+            let rows: [RemoteRow] = try await client.database
                 .from("tasks")
-                .select()
-                .eq("user_id", value: uid)
+                .select("payload")
+                .eq("user_id", value: ownerId)
                 .execute()
                 .value
-        } catch { }
+            remoteTasks = rows.compactMap {
+                try? JSONDecoder().decode(TaskItem.self, from: $0.payload)
+            }
+        } catch {
+            print("Task sync download failed: \(error)")
+        }
 
         do {
-            remoteDiary = try await client.database
+            let rows: [RemoteRow] = try await client.database
                 .from("diary_entries")
-                .select()
-                .eq("user_id", value: uid)
+                .select("payload")
+                .eq("user_id", value: ownerId)
                 .execute()
                 .value
-        } catch { }
+            remoteDiary = rows.compactMap {
+                try? JSONDecoder().decode(DiaryEntry.self, from: $0.payload)
+            }
+        } catch {
+            print("Diary sync download failed: \(error)")
+        }
 
-        // Merge
-        let mergedTasks = mergeByUpdatedAt(local: localTasks, remote: remoteTasks, id: { $0.id }, updatedAt: { $0.updatedAt })
-        let mergedDiary = mergeByUpdatedAt(local: localDiary, remote: remoteDiary, id: { $0.id }, updatedAt: { $0.updatedAt })
+        let mergedTasks = mergeByUpdatedAt(
+            local: localTasks,
+            remote: remoteTasks,
+            id: { $0.id },
+            updatedAt: { $0.updatedAt }
+        )
+        let mergedDiary = mergeByUpdatedAt(
+            local: localDiary,
+            remote: remoteDiary,
+            id: { $0.id },
+            updatedAt: { $0.updatedAt }
+        )
 
-        // Save local
-        Persistence.save(mergedTasks, key: tasksKey, userId: uid)
-        Persistence.save(mergedDiary, key: diaryKey, userId: uid)
-
-        // Update memory
+        Persistence.save(mergedTasks, key: tasksKey, userId: ownerId)
+        Persistence.save(mergedDiary, key: diaryKey, userId: ownerId)
         state.tasks = mergedTasks
         state.diary = mergedDiary
 
-        // Push deltas (debounced)
         schedulePush(state: state)
     }
 
@@ -58,16 +84,36 @@ enum SyncEngine {
         pushTask?.cancel()
         pushTask = Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
             await pushNow(state: state)
         }
     }
 
-    private static func pushNow(state: AppState) async {
-        guard let uid = state.sessionUserId else { return }
-        let client = SupabaseClientProvider.shared.client
+    static func deleteTask(id: UUID, state: AppState) async {
+        await deleteRemoteItem(table: "tasks", id: id, state: state)
+    }
 
-        let tasks = state.tasks
-        let diary = state.diary
+    static func deleteDiaryEntry(id: UUID, state: AppState) async {
+        await deleteRemoteItem(table: "diary_entries", id: id, state: state)
+    }
+
+    private static func deleteRemoteItem(table: String, id: UUID, state: AppState) async {
+        guard let ownerId = state.careDataOwnerId ?? state.sessionUserId else { return }
+        do {
+            try await SupabaseClientProvider.shared.client.database
+                .from(table)
+                .delete()
+                .eq("user_id", value: ownerId)
+                .eq("item_id", value: id.uuidString)
+                .execute()
+        } catch {
+            print("Remote delete failed for \(table): \(error)")
+        }
+    }
+
+    private static func pushNow(state: AppState) async {
+        guard let ownerId = state.careDataOwnerId ?? state.sessionUserId else { return }
+        let client = SupabaseClientProvider.shared.client
 
         struct TaskRow: Encodable {
             let user_id: String
@@ -80,57 +126,72 @@ enum SyncEngine {
         struct DiaryRow: Encodable {
             let user_id: String
             let item_id: String
-            let date: Date
-            let text: String
-            let mood: String?
+            let payload: Data
             let updated_at: Date
             let created_at: Date
         }
 
-        let taskRows: [TaskRow] = tasks.map { t in
-            let payload = (try? JSONEncoder().encode(t)) ?? Data()
-            return TaskRow(
-                user_id: uid,
-                item_id: t.id.uuidString,
-                payload: payload,
-                updated_at: t.updatedAt,
-                created_at: t.createdAt
+        let taskRows = state.tasks.map { task in
+            TaskRow(
+                user_id: ownerId,
+                item_id: task.id.uuidString,
+                payload: (try? JSONEncoder().encode(task)) ?? Data(),
+                updated_at: task.updatedAt,
+                created_at: task.createdAt
             )
         }
 
-        let diaryRows: [DiaryRow] = diary.map { e in
+        let diaryRows = state.diary.map { entry in
             DiaryRow(
-                user_id: uid,
-                item_id: e.id.uuidString,
-                date: e.date,
-                text: e.text,
-                mood: e.mood?.rawValue,
-                updated_at: e.updatedAt,
-                created_at: e.createdAt
+                user_id: ownerId,
+                item_id: entry.id.uuidString,
+                payload: (try? JSONEncoder().encode(entry)) ?? Data(),
+                updated_at: entry.updatedAt,
+                created_at: entry.createdAt
             )
         }
 
-        do { try? await client.database.from("tasks").upsert(taskRows).execute() } catch { }
-        do { try? await client.database.from("diary_entries").upsert(diaryRows).execute() } catch { }
+        if !taskRows.isEmpty {
+            do {
+                try await client.database
+                    .from("tasks")
+                    .upsert(taskRows, onConflict: "user_id,item_id")
+                    .execute()
+            } catch {
+                print("Task sync upload failed: \(error)")
+            }
+        }
+
+        if !diaryRows.isEmpty {
+            do {
+                try await client.database
+                    .from("diary_entries")
+                    .upsert(diaryRows, onConflict: "user_id,item_id")
+                    .execute()
+            } catch {
+                print("Diary sync upload failed: \(error)")
+            }
+        }
     }
 
-    // MARK: - Generic merge (robusto, no Mirror/KVC)
-    private static func mergeByUpdatedAt<T: Codable, Key: Hashable>(
+    private static func mergeByUpdatedAt<T, Key: Hashable>(
         local: [T],
         remote: [T],
         id: (T) -> Key,
         updatedAt: (T) -> Date
     ) -> [T] {
-        var dict: [Key: T] = [:]
-        for l in local { dict[id(l)] = l }
-        for r in remote {
-            let k = id(r)
-            if let existing = dict[k] {
-                if updatedAt(r) > updatedAt(existing) { dict[k] = r }
+        var items: [Key: T] = [:]
+        for localItem in local { items[id(localItem)] = localItem }
+        for remoteItem in remote {
+            let key = id(remoteItem)
+            if let existing = items[key] {
+                if updatedAt(remoteItem) > updatedAt(existing) {
+                    items[key] = remoteItem
+                }
             } else {
-                dict[k] = r
+                items[key] = remoteItem
             }
         }
-        return Array(dict.values)
+        return Array(items.values)
     }
 }

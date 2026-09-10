@@ -33,6 +33,21 @@ struct AccountView: View {
                                 )
                             Text("Email: \(user.email)")
                                 .foregroundStyle(textSecondary)
+                            if let role = state.userRole {
+                                Label(role.capitalized, systemImage: role == "caregiver" ? "person.2.fill" : "person.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(textSecondary)
+                            }
+                            if state.userRole == "caregiver", let patientName = state.careDataOwnerName {
+                                Label("Caring for \(patientName)", systemImage: "heart.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppTheme.primary)
+                            }
+                            if state.careLinkStatus == "pending" {
+                                Label("Care connection awaiting confirmation", systemImage: "clock.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppTheme.warning)
+                            }
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 10) {
@@ -76,7 +91,7 @@ struct AccountView: View {
                         if state.isGuest {
                             state.setGuest(false)
                         } else {
-                            state.logout()
+                            Task { await state.logout() }
                         }
                     } label: {
                         Text(state.isGuest ? "Exit Guest" : "Logout")
@@ -95,6 +110,11 @@ struct AccountView: View {
                 .appCardStyle()
             }
             .navigationTitle("Account")
+        }
+        .task {
+            guard !state.isGuest else { return }
+            await state.refreshProfileFromSupabase()
+            await SyncEngine.fullSync(state: state)
         }
     }
 }

@@ -309,7 +309,11 @@ struct DiaryView: View {
                 Button("Delete", role: .destructive) {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     if let e = entryToDelete {
+                        FileStore.removeManagedFile(at: e.videoURL)
+                        FileStore.removeManagedFile(at: e.audioURL)
                         state.diary.removeAll { $0.id == e.id }
+                        state.saveDiary()
+                        Task { await SyncEngine.deleteDiaryEntry(id: e.id, state: state) }
                     }
                     entryToDelete = nil
                 }
@@ -644,18 +648,25 @@ struct DiaryView: View {
 
     private func addEntry() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let persistentVideoURL = pickedVideoURL.flatMap {
+            FileStore.persist(url: $0, folder: "videos")
+        }
+        let persistentAudioURL = recorder.lastRecordingURL.flatMap {
+            FileStore.persist(url: $0, folder: "audio")
+        }
 
         state.diary.insert(
             DiaryEntry(
                 date: .now,
                 text: trimmed,
                 imageData: pickedImageData,
-                videoURL: pickedVideoURL,
-                audioURL: recorder.lastRecordingURL,
+                videoURL: persistentVideoURL,
+                audioURL: persistentAudioURL,
                 mood: selectedMood
             ),
             at: 0
         )
+        state.saveDiary()
 
         text = ""
         pickedItem = nil

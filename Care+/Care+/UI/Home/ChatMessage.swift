@@ -1,20 +1,23 @@
 import Foundation
 
-enum ChatSender: String, Codable, Hashable {
-    case user
-    case caregiver
-}
-
-struct ChatMessage: Identifiable, Codable, Hashable {
+struct ChatMessage: Identifiable, Hashable {
     let id: UUID
-    let sender: ChatSender
+    let senderId: String
     let text: String
     let date: Date
+    let isFromCurrentUser: Bool
 
-    init(id: UUID = UUID(), sender: ChatSender, text: String, date: Date = .now) {
+    init(
+        id: UUID = UUID(),
+        senderId: String,
+        text: String,
+        date: Date = .now,
+        isFromCurrentUser: Bool
+    ) {
         self.id = id
-        self.sender = sender
+        self.senderId = senderId
         self.text = text
         self.date = date
+        self.isFromCurrentUser = isFromCurrentUser
     }
 }

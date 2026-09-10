@@ -14,15 +14,6 @@ import Supabase
 @Observable
 final class AppState {
 
-    // 🔒 BLOCCO TEMPORANEO SCELTA RUOLO / SERVER FLOW
-    // Metti false quando vuoi riattivare RoleChoice + SetupWizard + Sync
-    let bloccoScelta: Bool = true
-
-    enum UserRole { case user, caregiver }
-    var selectedRole: UserRole? = nil
-    var roleSessionUserId: String? = nil
-    var hasChosenRoleThisLogin: Bool { selectedRole != nil }
-
     // MARK: - Stored state
     var tasks: [TaskItem] = []
     var diary: [DiaryEntry] = []
@@ -34,6 +25,11 @@ final class AppState {
     var isGuest: Bool = false
 
     var sessionUserId: String?
+    /// Patient whose care data is currently displayed. For a patient this is their own id;
+    /// for a caregiver it is the id from the active care link.
+    var careDataOwnerId: String?
+    var careDataOwnerName: String?
+    var careLinkStatus: String?
 
     var userRole: String?
     var profileStatus: String? = nil
@@ -73,28 +69,10 @@ final class AppState {
     private let contactsImportedKey = "contacts_imported_v1"
     private let languageKey = "app_language_code_v1"
     private let profileStatusKey = "profile_status_v1"
-    private let firstLaunchKey = "hasLaunchedBefore_v1"
     private let guestKey = "guest_mode_v1"
 
     // MARK: - Lifecycle
     func load() {
-        // First launch handling: force sign-out and reset session-related state
-        let hasLaunchedBefore = UserDefaults.standard.bool(forKey: firstLaunchKey)
-        if hasLaunchedBefore == false {
-            UserDefaults.standard.set(true, forKey: firstLaunchKey)
-            Task { @MainActor in
-                if let _ = await AuthService.shared.currentSession() {
-                    try? await AuthService.shared.signOut()
-                }
-                // Clear any in-memory session state so the app routes to login
-                self.currentUser = nil
-                self.sessionUserId = nil
-                self.saveUserRole(nil)
-                self.saveProfileReady(false)
-                self.saveProfileStatus(nil)
-            }
-        }
-
         // User
         if let data = UserDefaults.standard.data(forKey: userKey),
            let user = try? JSONDecoder().decode(UserProfile.self, from: data) {
@@ -138,10 +116,83 @@ final class AppState {
 
     // MARK: - Load user-scoped data
     func loadUserData(_ userId: String) {
-        let t: [TaskItem] = Persistence.load([TaskItem].self, key: tasksKey, userId: userId, defaultValue: [])
-        let d: [DiaryEntry] = Persistence.load([DiaryEntry].self, key: diaryKey, userId: userId, defaultValue: [])
-        self.tasks = t
-        self.diary = d
+        migrateLegacyDataIfNeeded(to: userId)
+
+        let c: [ContactItem] = Persistence.load([ContactItem].self, key: contactsKey, userId: userId, defaultValue: [])
+        let calls: [CallEvent] = Persistence.load([CallEvent].self, key: callsKey, userId: userId, defaultValue: [])
+        let games: [GameSessionResult] = Persistence.load([GameSessionResult].self, key: gamesKey, userId: userId, defaultValue: [])
+        self.contacts = c
+        self.callEvents = calls
+        self.gameResults = games
+        let scopedSOSKey = Persistence.scopedKey(key: sosKey, userId: userId)
+        sosContactID = UserDefaults.standard.string(forKey: scopedSOSKey).flatMap(UUID.init(uuidString:))
+        let scopedImportKey = Persistence.scopedKey(key: contactsImportedKey, userId: userId)
+        hasImportedDeviceContacts = UserDefaults.standard.bool(forKey: scopedImportKey)
+        loadCareData(userId)
+    }
+
+    private func loadCareData(_ ownerId: String) {
+        careDataOwnerId = ownerId
+        tasks = Persistence.load([TaskItem].self, key: tasksKey, userId: ownerId, defaultValue: [])
+        diary = Persistence.load([DiaryEntry].self, key: diaryKey, userId: ownerId, defaultValue: [])
+    }
+
+    private func configureCareDataOwner() async {
+        guard let sessionUserId else { return }
+        guard userRole?.lowercased() == "caregiver" else {
+            if userRole?.lowercased() == "patient" {
+                let links = try? await CareLinksService.shared.fetchCaregivers(forPatientId: sessionUserId)
+                careLinkStatus = links?.first?.status
+            } else {
+                careLinkStatus = nil
+            }
+            careDataOwnerName = currentUser?.name
+            loadCareData(sessionUserId)
+            return
+        }
+
+        let links = try? await CareLinksService.shared.fetchPatients(forCaregiverId: sessionUserId)
+        let activeLink = links?.first(where: { $0.status.lowercased() == "active" })
+        careLinkStatus = activeLink?.status ?? links?.first?.status
+        let patientId = activeLink?.patient_id
+        if let patientId = patientId {
+            let profile = try? await ProfilesService.shared.fetchProfile(id: patientId)
+            careDataOwnerName = profile?.display_name
+        } else {
+            careDataOwnerName = nil
+        }
+        loadCareData(patientId ?? sessionUserId)
+    }
+
+    private func migrateLegacyDataIfNeeded(to userId: String) {
+        let migrationKey = "legacy_data_migrated_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        let legacyTasks: [TaskItem] = Persistence.load([TaskItem].self, key: tasksKey, defaultValue: [])
+        let legacyDiary: [DiaryEntry] = Persistence.load([DiaryEntry].self, key: diaryKey, defaultValue: [])
+        let legacyContacts: [ContactItem] = Persistence.load([ContactItem].self, key: contactsKey, defaultValue: [])
+        let legacyCalls: [CallEvent] = Persistence.load([CallEvent].self, key: callsKey, defaultValue: [])
+        let legacyGames: [GameSessionResult] = Persistence.load([GameSessionResult].self, key: gamesKey, defaultValue: [])
+
+        if !legacyTasks.isEmpty { Persistence.save(legacyTasks, key: tasksKey, userId: userId) }
+        if !legacyDiary.isEmpty { Persistence.save(legacyDiary, key: diaryKey, userId: userId) }
+        if !legacyContacts.isEmpty { Persistence.save(legacyContacts, key: contactsKey, userId: userId) }
+        if !legacyCalls.isEmpty { Persistence.save(legacyCalls, key: callsKey, userId: userId) }
+        if !legacyGames.isEmpty { Persistence.save(legacyGames, key: gamesKey, userId: userId) }
+        if let legacySOS = UserDefaults.standard.string(forKey: sosKey) {
+            UserDefaults.standard.set(
+                legacySOS,
+                forKey: Persistence.scopedKey(key: sosKey, userId: userId)
+            )
+        }
+        if UserDefaults.standard.bool(forKey: contactsImportedKey) {
+            UserDefaults.standard.set(
+                true,
+                forKey: Persistence.scopedKey(key: contactsImportedKey, userId: userId)
+            )
+        }
+
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
     // MARK: - SOS Management
@@ -151,7 +202,9 @@ final class AppState {
 
     func setSOSContact(_ contact: ContactItem) {
         sosContactID = contact.id
-        UserDefaults.standard.set(contact.id.uuidString, forKey: sosKey)
+        let scope = sessionUserId ?? (isGuest ? "guest" : nil)
+        let key = scope.map { Persistence.scopedKey(key: sosKey, userId: $0) } ?? sosKey
+        UserDefaults.standard.set(contact.id.uuidString, forKey: key)
     }
 
     // MARK: - Save helpers
@@ -184,23 +237,33 @@ final class AppState {
         UserDefaults.standard.set(ready, forKey: profileReadyKey)
     }
 
-    func saveContacts() { Persistence.save(contacts, key: contactsKey) }
-    func saveCalls() { Persistence.save(callEvents, key: callsKey) }
-    func saveGames() { Persistence.save(gameResults, key: gamesKey) }
+    func saveContacts() { saveScoped(contacts, key: contactsKey) }
+    func saveCalls() { saveScoped(callEvents, key: callsKey) }
+    func saveGames() { saveScoped(gameResults, key: gamesKey) }
+
+    private func saveScoped<T: Encodable>(_ value: T, key: String) {
+        if let uid = sessionUserId {
+            Persistence.save(value, key: key, userId: uid)
+        } else if isGuest {
+            Persistence.save(value, key: key, userId: "guest")
+        } else {
+            Persistence.save(value, key: key)
+        }
+    }
 
     func saveTasks() {
-        if let uid = sessionUserId {
-            Persistence.save(tasks, key: tasksKey, userId: uid)
-            if !bloccoScelta { SyncEngine.schedulePush(state: self) }
+        if let ownerId = careDataOwnerId ?? sessionUserId {
+            Persistence.save(tasks, key: tasksKey, userId: ownerId)
+            SyncEngine.schedulePush(state: self)
         } else {
             Persistence.save(tasks, key: tasksKey)
         }
     }
 
     func saveDiary() {
-        if let uid = sessionUserId {
-            Persistence.save(diary, key: diaryKey, userId: uid)
-            if !bloccoScelta { SyncEngine.schedulePush(state: self) }
+        if let ownerId = careDataOwnerId ?? sessionUserId {
+            Persistence.save(diary, key: diaryKey, userId: ownerId)
+            SyncEngine.schedulePush(state: self)
         } else {
             Persistence.save(diary, key: diaryKey)
         }
@@ -218,7 +281,9 @@ final class AppState {
 
     func setContactsImported() {
         hasImportedDeviceContacts = true
-        UserDefaults.standard.set(true, forKey: contactsImportedKey)
+        let scope = sessionUserId ?? (isGuest ? "guest" : nil)
+        let key = scope.map { Persistence.scopedKey(key: contactsImportedKey, userId: $0) } ?? contactsImportedKey
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     func setCalmingReminders(enabled: Bool) {
@@ -239,13 +304,13 @@ final class AppState {
     func setGuest(_ enabled: Bool) {
         isGuest = enabled
         UserDefaults.standard.set(enabled, forKey: guestKey)
+        if enabled {
+            loadUserData("guest")
+        }
     }
 
     // MARK: - Auth (server gating)
     func refreshProfileFromSupabase() async {
-        // 🔒 blocco: non chiamare server
-        if bloccoScelta { return }
-
         do {
             guard let _ = await AuthService.shared.currentSession() else {
                 self.currentUser = nil
@@ -255,29 +320,25 @@ final class AppState {
                 return
             }
 
-            if let profile = try await ProfilesService.shared.fetchProfile() {
+            let fetchedProfile = try await ProfilesService.shared.fetchProfile()
+            if let profile = fetchedProfile {
                 self.saveProfileStatus(profile.status)
 
-                switch profile.status.lowercased() {
-                case "pending":
-                    self.saveProfileReady(false)
-                    self.saveUserRole(nil)
-                case "active":
-                    self.saveProfileReady(true)
-                    self.saveUserRole(profile.role)
-                    self.saveProfileStatus("active")
-                    if self.currentUser == nil {
-                        self.currentUser = UserProfile(
-                            name: profile.display_name ?? "User",
-                            phone: "",
-                            email: "",
-                            provider: "email"
-                        )
-                        self.saveUser()
-                    }
-                default:
-                    self.saveProfileReady(false)
+                self.saveUserRole(profile.role)
+                self.saveProfileReady(profile.status.lowercased() == "active")
+
+                if let displayName = profile.display_name, !displayName.isEmpty {
+                    let existing = self.currentUser
+                    self.currentUser = UserProfile(
+                        id: existing?.id ?? UUID(),
+                        name: displayName,
+                        phone: existing?.phone ?? "",
+                        email: profile.email ?? existing?.email ?? "",
+                        provider: existing?.provider ?? "email"
+                    )
+                    self.saveUser()
                 }
+                await self.configureCareDataOwner()
             } else {
                 self.saveProfileReady(false)
                 self.saveUserRole(nil)
@@ -290,19 +351,22 @@ final class AppState {
         }
     }
 
-    func logout() {
-        Task { try? await AuthService.shared.signOut() }
+    func logout() async {
+        try? await AuthService.shared.signOut()
         setGuest(false)
 
         currentUser = nil
         UserDefaults.standard.removeObject(forKey: userKey)
         sessionUserId = nil
-
-        selectedRole = nil
-        roleSessionUserId = nil
+        careDataOwnerId = nil
+        careDataOwnerName = nil
+        careLinkStatus = nil
 
         tasks = []
         diary = []
+        contacts = []
+        callEvents = []
+        gameResults = []
 
         saveUserRole(nil)
         saveProfileReady(false)
@@ -385,6 +449,7 @@ final class AppState {
     }
 
     func callsPerDayLastNDays(days: Int = 14, now: Date = .now) -> [(dayStart: Date, count: Int)] {
+        guard days > 0 else { return [] }
         let cal = romeCalendar()
         let startToday = cal.startOfDay(for: now)
 
@@ -437,14 +502,17 @@ final class AppState {
 
         let sessions = filtered.count
         let totalAttempts = filtered.reduce(0) { $0 + $1.totalAttempts }
+        let totalRounds = filtered.reduce(0) { $0 + $1.totalRounds }
+        guard totalRounds > 0 else { return (sessions, totalAttempts, 0, 0) }
         let avgTime = Double(filtered.reduce(0) { $0 + $1.durationSeconds }) / Double(sessions)
-        let avgScore = Double(filtered.reduce(0) { $0 + $1.correctCount }) / Double(filtered.reduce(0) { $0 + $1.totalRounds })
+        let avgScore = Double(filtered.reduce(0) { $0 + $1.correctCount }) / Double(totalRounds)
 
         return (sessions, totalAttempts, avgTime, avgScore)
     }
 
     func guessWhoAvgScorePerDayLastNDays(days: Int = 14, now: Date = .now)
     -> [(dayStart: Date, avgScore: Double, sessions: Int)] {
+        guard days > 0 else { return [] }
         let cal = romeCalendar()
         let startToday = cal.startOfDay(for: now)
         let earliest = cal.date(byAdding: .day, value: -(days - 1), to: startToday) ?? startToday
@@ -467,13 +535,16 @@ final class AppState {
 
         return buckets.map { day, sessions in
             if sessions.isEmpty { return (dayStart: day, avgScore: 0, sessions: 0) }
-            let avg = Double(sessions.reduce(0) { $0 + $1.correctCount }) / Double(sessions.reduce(0) { $0 + $1.totalRounds })
+            let rounds = sessions.reduce(0) { $0 + $1.totalRounds }
+            guard rounds > 0 else { return (dayStart: day, avgScore: 0, sessions: sessions.count) }
+            let avg = Double(sessions.reduce(0) { $0 + $1.correctCount }) / Double(rounds)
             return (dayStart: day, avgScore: avg, sessions: sessions.count)
         }
         .sorted { $0.dayStart < $1.dayStart }
     }
 
     func guessWhoAttemptsPerDayLastNDays(days: Int = 14, now: Date = .now) -> [(dayStart: Date, attempts: Int)] {
+        guard days > 0 else { return [] }
         let cal = romeCalendar()
         let startToday = cal.startOfDay(for: now)
         let earliest = cal.date(byAdding: .day, value: -(days - 1), to: startToday) ?? startToday
@@ -530,12 +601,29 @@ extension AppState {
 
         guard let session else {
             self.currentUser = nil
+            self.sessionUserId = nil
+            self.careDataOwnerId = nil
+            self.careDataOwnerName = nil
+            self.careLinkStatus = nil
+            if self.isGuest {
+                self.loadUserData("guest")
+            } else {
+                self.tasks = []
+                self.diary = []
+                self.contacts = []
+                self.callEvents = []
+                self.gameResults = []
+            }
             UserDefaults.standard.removeObject(forKey: self.userKey)
+            self.saveUserRole(nil)
+            self.saveProfileStatus(nil)
+            self.saveProfileReady(false)
             return
         }
 
         let email = session.user.email ?? ""
         let nameFromEmail = email.split(separator: "@").first.map(String.init) ?? "User"
+        setGuest(false)
 
         self.currentUser = UserProfile(
             name: nameFromEmail,
@@ -548,34 +636,12 @@ extension AppState {
         let userId = session.user.id.uuidString
         self.sessionUserId = userId
 
-        // Role gating: clear role only when session user changes
-        if roleSessionUserId != userId {
-            selectedRole = nil
-            roleSessionUserId = userId
-        }
-
-        // Local migration: copy legacy -> scoped once
-        let legacyTasks: [TaskItem] = Persistence.load([TaskItem].self, key: tasksKey, defaultValue: [])
-        let legacyDiary: [DiaryEntry] = Persistence.load([DiaryEntry].self, key: diaryKey, defaultValue: [])
-        let scopedTasks: [TaskItem] = Persistence.load([TaskItem].self, key: tasksKey, userId: userId, defaultValue: [])
-        let scopedDiary: [DiaryEntry] = Persistence.load([DiaryEntry].self, key: diaryKey, userId: userId, defaultValue: [])
-        if scopedTasks.isEmpty && !legacyTasks.isEmpty { Persistence.save(legacyTasks, key: tasksKey, userId: userId) }
-        if scopedDiary.isEmpty && !legacyDiary.isEmpty { Persistence.save(legacyDiary, key: diaryKey, userId: userId) }
-
         self.loadUserData(userId)
 
-        // 🔒 BLOCCO: non fare refresh profile / sync
-        if bloccoScelta {
-            // opzionale: forza stato locale per evitare schermate server-based
-            self.userRole = "patient"       // o "caregiver"
-            self.profileStatus = "active"
-            self.isProfileReady = true
-            self.saveUserRole(self.userRole)
-            self.saveProfileStatus(self.profileStatus)
-            self.saveProfileReady(true)
-            return
-        }
-
+        try? await ProfilesService.shared.ensureProfile(
+            displayName: nameFromEmail,
+            email: email
+        )
         await self.refreshProfileFromSupabase()
         await SyncEngine.fullSync(state: self)
     }

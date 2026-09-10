@@ -19,7 +19,7 @@ struct BottomPillTabBar: View {
 
             tab(.tasks, "Tasks", "checklist")
             tab(.diary, "Diary", "book")
-            tab(.games, "Chat", "bubble.left.and.bubble.right.fill")
+            tab(.games, "Games", "gamecontroller.fill")
             tab(.contacts, "Contacts", "person.2.fill")
         }
         .frame(height: barHeight)                 // ✅ altezza fissa

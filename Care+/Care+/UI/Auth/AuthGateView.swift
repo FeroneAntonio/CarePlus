@@ -21,6 +21,7 @@ struct AuthGateView: View {
             }
         }
         .task {
+            state.load()
             await state.loadSupabaseSession()
             isBootstrapping = false
         }

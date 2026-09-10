@@ -75,7 +75,7 @@ private extension HomeView {
 
                 Button(role: .destructive) {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    state.logout()
+                    Task { await state.logout() }
                 } label: {
                     Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
                 }
@@ -530,6 +530,7 @@ private extension HomeView {
     private func toggleDoneHome(_ task: TaskItem) {
         if let idx = state.tasks.firstIndex(where: { $0.id == task.id }) {
             state.tasks[idx].isDone.toggle()
+            state.tasks[idx].updatedAt = .now
             state.saveTasks()
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         }

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -21,7 +22,10 @@ struct MediaLoader {
 
         static var transferRepresentation: some TransferRepresentation {
             FileRepresentation(importedContentType: .movie) { received in
-                Self(url: received.file)
+                guard let persistentURL = FileStore.persist(url: received.file, folder: "videos") else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                return Self(url: persistentURL)
             }
         }
     }
@@ -35,7 +39,7 @@ struct MediaLoader {
 
         // Try image first
         if let imageData = try? await item.loadTransferable(type: Data.self) {
-            return Result(imageData: imageData, videoURL: nil)
+            return Result(imageData: optimizedImageData(imageData), videoURL: nil)
         }
 
         // Determine content type (best-effort, iOS16+)
@@ -52,8 +56,9 @@ struct MediaLoader {
         }
 
         // Try direct URL
-        if let videoURL = try? await item.loadTransferable(type: URL.self) {
-            return Result(imageData: nil, videoURL: videoURL)
+        if let videoURL = try? await item.loadTransferable(type: URL.self),
+           let persistentURL = FileStore.persist(url: videoURL, folder: "videos") {
+            return Result(imageData: nil, videoURL: persistentURL)
         }
 
         // Try custom transferable movie
@@ -69,7 +74,8 @@ struct MediaLoader {
                     .appendingPathExtension("mov")
                 do {
                     try videoData.write(to: tempURL, options: .atomic)
-                    return Result(imageData: nil, videoURL: tempURL)
+                    let persistentURL = FileStore.persist(url: tempURL, folder: "videos")
+                    return Result(imageData: nil, videoURL: persistentURL)
                 } catch {
                     // fall through
                 }
@@ -77,5 +83,18 @@ struct MediaLoader {
         }
 
         return Result(imageData: nil, videoURL: nil)
+    }
+
+    private static func optimizedImageData(_ data: Data) -> Data {
+        guard let image = UIImage(data: data) else { return data }
+        let longestSide = max(image.size.width, image.size.height)
+        let scale = min(1, 1_600 / max(longestSide, 1))
+        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return resized.jpegData(compressionQuality: 0.82) ?? data
     }
 }

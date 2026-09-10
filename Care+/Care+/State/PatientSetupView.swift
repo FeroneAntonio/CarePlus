@@ -26,6 +26,10 @@ struct PatientSetupView: View {
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+
+                Text("For privacy, the connection activates only after the caregiver enters your email from their account.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Button {
@@ -44,6 +48,8 @@ struct PatientSetupView: View {
 
     @MainActor
     private func submitAsync() async {
+        guard !isSubmitting else { return }
+        error = nil
         guard let session = await AuthService.shared.currentSession() else {
             error = "Not authenticated"
             return
@@ -51,14 +57,15 @@ struct PatientSetupView: View {
 
         let patientId = session.user.id.uuidString
 
-        guard let by = Int(birthYear), by > 1900, by < 2100 else {
+        let currentYear = Calendar.current.component(.year, from: .now)
+        guard let by = Int(birthYear), by >= 1900, by <= currentYear else {
             error = "Enter a valid birth year"
             return
         }
 
         let email = caregiverEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !email.isEmpty else {
-            error = "Enter caregiver email"
+        guard Validators.isValidEmail(email) else {
+            error = "Enter a valid caregiver email"
             return
         }
 
@@ -73,17 +80,20 @@ struct PatientSetupView: View {
             )
 
             // 2) Resolve caregiver id by email via RPC (bypasses RLS safely)
-            let caregiverId = try await ProfilesService.shared.getProfileIdByEmail(email)
-            guard let caregiverId else {
+            let caregiver = try await ProfilesService.shared.findProfile(byEmail: email)
+            guard let caregiver else {
                 error = "Caregiver not found"
                 return
             }
+            guard caregiver.role?.lowercased() == "caregiver" else {
+                error = "That account is not registered as a caregiver"
+                return
+            }
 
-            // 3) Create care link
-            try await CareLinksService.shared.createLink(
+            // 3) Request care link (the caregiver confirms from their account)
+            try await CareLinksService.shared.requestLink(
                 patientId: patientId,
-                caregiverId: caregiverId,
-                status: "active"
+                caregiverId: caregiver.id
             )
 
             // 4) Activate profile (CHECK wants active + role not null; role already set in RoleChoice)
@@ -100,16 +110,16 @@ struct PatientSetupView: View {
         guard let session = await AuthService.shared.currentSession() else { return }
         let userId = session.user.id.uuidString
 
-        struct Upsert: Encodable {
-            let id: String
+        struct StatusUpdate: Encodable {
             let status: String
         }
 
-        let payload = Upsert(id: userId, status: "active")
+        let payload = StatusUpdate(status: "active")
 
         _ = try await SupabaseClientProvider.shared.client.database
             .from("profiles")
-            .upsert(payload, onConflict: "id")
+            .update(payload)
+            .eq("id", value: userId)
             .execute()
     }
 }

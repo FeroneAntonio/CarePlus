@@ -16,8 +16,9 @@ struct LoginFormView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showErrors = false
+    @State private var isLoading = false
+    @State private var errorMessage: String?
     @State private var isCaregiver: Bool = false
-    @State private var useUsernameInsteadOfEmail: Bool = false
     @State private var showingForgotPasswordAlert: Bool = false
     @State private var showingForgotEmailAlert: Bool = false
 
@@ -25,13 +26,12 @@ struct LoginFormView: View {
 
     private var nameOK: Bool { Validators.nonEmpty(name) }
     private var phoneOK: Bool { Validators.isValidPhone(phone) }
-    private var emailOK: Bool { useUsernameInsteadOfEmail ? true : Validators.isValidEmail(email) }
-    private var usernameOK: Bool { useUsernameInsteadOfEmail ? Validators.nonEmpty(email) : true }
+    private var emailOK: Bool { Validators.isValidEmail(email) }
     private var passwordOK: Bool { password.count >= 6 }
 
     private var canContinue: Bool {
         if mode == .login {
-            return (useUsernameInsteadOfEmail ? usernameOK : emailOK) && passwordOK
+            return emailOK && passwordOK && !isLoading
         } else {
             return nameOK && phoneOK && emailOK && passwordOK
         }
@@ -85,21 +85,14 @@ struct LoginFormView: View {
                     }
 
                     if mode == .login {
-                        Toggle(isOn: $useUsernameInsteadOfEmail) {
-                            Text("Use username instead of email")
-                                .foregroundStyle(AppTheme.textPrimary)
-                        }
-                        .tint(AppTheme.primary)
-
                         LabeledField(
-                            label: useUsernameInsteadOfEmail ? "Username (required)" : "Email (required)",
-                            placeholder: useUsernameInsteadOfEmail ? "your_username" : "name@email.com",
+                            label: "Email (required)",
+                            placeholder: "name@email.com",
                             text: $email,
-                            keyboard: useUsernameInsteadOfEmail ? .default : .emailAddress
+                            keyboard: .emailAddress
                         )
 
-                        if showErrors && useUsernameInsteadOfEmail && !usernameOK { err("Username is required.") }
-                        if showErrors && !useUsernameInsteadOfEmail && !emailOK { err("Invalid email format.") }
+                        if showErrors && !emailOK { err("Invalid email format.") }
 
                         LabeledField(label: "Password (min 6)", placeholder: "Password", text: $password, isSecure: true)
                         if showErrors && !passwordOK { err("Password must be at least 6 chars.") }
@@ -126,22 +119,27 @@ struct LoginFormView: View {
                     }
 
                     // ✅ bottone coerente con palette (usa PrimaryButton corretto)
-                    PrimaryButton(mode == .login ? "CONTINUE" : "REGISTER",
+                    PrimaryButton(isLoading ? "PLEASE WAIT…" : (mode == .login ? "CONTINUE" : "REGISTER"),
                                   style: .filled,
                                   color: AppTheme.primary,
                                   isEnabled: canContinue) {
                         if !canContinue { showErrors = true; return }
 
                         if mode == .login {
+                            isLoading = true
+                            errorMessage = nil
                             Task {
                                 do {
-                                    _ = try await AuthService.shared.signIn(email: email, password: password)
+                                    _ = try await AuthService.shared.signIn(
+                                        email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                                        password: password
+                                    )
                                     await state.loadSupabaseSession()
                                     dismiss()
                                 } catch {
-                                    // mostra errore in UI (es: errorMessage = error.localizedDescription)
-                                    print("Login error:", error)
+                                    errorMessage = "Unable to sign in. Check your email and password."
                                 }
+                                isLoading = false
                             }
                         } else {
                             Task {
@@ -154,6 +152,14 @@ struct LoginFormView: View {
                                 }
                             }
                         }
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
                     }
                 }
                 .alert("Password recovery", isPresented: $showingForgotPasswordAlert) {

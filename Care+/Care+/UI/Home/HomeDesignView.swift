@@ -31,7 +31,8 @@ struct HomeDesignView: View {
     // MARK: - Data helpers
 
     private var firstName: String {
-        state.currentUser?.name.split(separator: " ").first.map(String.init) ?? "Antonio"
+        let displayName = state.careDataOwnerName ?? state.currentUser?.name ?? "there"
+        return displayName.split(separator: " ").first.map(String.init) ?? "there"
     }
 
     private var dayBounds: (start: Date, end: Date) {
@@ -86,6 +87,7 @@ struct HomeDesignView: View {
                         HubHeaderView(
                             displayName: state.currentUser?.name ?? "",
                             onAccountTap: { showAccount = true },
+                            onChatTap: { selectedTab = .chat },
                             onMenuTap: { showMenu = true }
                         )
                         .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .visible) {
@@ -189,6 +191,7 @@ struct HubHeaderView: View {
 
     let displayName: String
     let onAccountTap: () -> Void
+    let onChatTap: () -> Void
     let onMenuTap: () -> Void
 
     var body: some View {
@@ -203,6 +206,15 @@ struct HubHeaderView: View {
                 .buttonStyle(.plain)
 
                 Spacer()
+
+                Button(action: onChatTap) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(AppTheme.primary)
+                        .frame(width: 44, height: 44, alignment: .center)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open care chat")
 
                 Button(action: onMenuTap) {
                     Image(systemName: "ellipsis")
@@ -257,6 +269,7 @@ private extension HomeDesignView {
                         Button {
                             if let idx = state.tasks.firstIndex(where: { $0.id == med.id }) {
                                 state.tasks[idx].isDone.toggle()
+                                state.tasks[idx].updatedAt = .now
 
                                 // ✅ Track completion timestamp (used for On time / Delayed)
                                 if state.tasks[idx].isDone {
@@ -458,6 +471,7 @@ private extension HomeDesignView {
             Button {
                 if let idx = state.tasks.firstIndex(where: { $0.id == task.id }) {
                     state.tasks[idx].isDone.toggle()
+                    state.tasks[idx].updatedAt = .now
 
                     // ✅ Track completion timestamp (used for On time / Delayed)
                     if state.tasks[idx].isDone {

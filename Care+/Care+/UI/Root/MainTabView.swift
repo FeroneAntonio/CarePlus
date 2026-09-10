@@ -15,6 +15,7 @@ struct MainTabView: View {
         case .diary: return .diary
         case .games: return .games
         case .contacts: return .contacts
+        case .chat: return .home
         }
     }
 
@@ -43,7 +44,7 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        let isChatActive: Bool = (selectedTab == .games)
+        let isChatActive: Bool = (selectedTab == .chat)
 
         ZStack(alignment: .bottom) {
             Group {
@@ -58,7 +59,9 @@ struct MainTabView: View {
                     DiaryView(state: state)
 
                 case .games:
-                    // ✅ Chat con back che torna alla tab precedente
+                    GamesView(state: state)
+
+                case .chat:
                     ChatView(
                         state: state,
                         selectedTab: $selectedTab,
@@ -94,11 +97,9 @@ struct MainTabView: View {
                 .accessibilityHidden(false)
             }
         }
-        .ignoresSafeArea(.keyboard)
-
         // ✅ aggiorna lastNonChatTab ogni volta che cambi tab (tranne chat)
         .onChange(of: selectedTab) { _, newValue in
-            if newValue != .games {
+            if newValue != .chat {
                 lastNonChatTab = newValue
             }
         }

@@ -2,21 +2,16 @@ import SwiftUI
 
 struct SignUpFlowView: View {
     @Bindable var state: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var step: Int = 1
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
+    @State private var requiresEmailConfirmation = false
 
     @State private var firstName = ""
     @State private var lastName = ""
-    @State private var phone = ""
     @State private var email = ""
     @State private var password = ""
-
-    @State private var caregiverFirstName = ""
-    @State private var caregiverLastName = ""
-    @State private var caregiverRelationship: String = "Family"
-    @State private var caregiverPhone = ""
-    @State private var caregiverEmail = ""
 
     var body: some View {
         NavigationStack {
@@ -29,18 +24,16 @@ struct SignUpFlowView: View {
                     SignUpStep1AboutYouView(
                         firstName: $firstName,
                         lastName: $lastName,
-                        phone: $phone,
                         email: $email,
                         password: $password,
                         isLoading: isLoading,
-                        errorMessage: errorMessage ?? "",
+                        errorMessage: errorMessage,
                         onContinue: {
                             isLoading = true
                             errorMessage = nil
                             Task {
                                 do {
                                     try await createAccount()
-                                    step = 2
                                 } catch {
                                     errorMessage = error.localizedDescription
                                 }
@@ -49,40 +42,14 @@ struct SignUpFlowView: View {
                         }
                     )
                 case 2:
-                    SignUpStep2CaregiverView(
-                        caregiverFirstName: $caregiverFirstName,
-                        caregiverLastName: $caregiverLastName,
-                        caregiverRelationship: $caregiverRelationship,
-                        caregiverPhone: $caregiverPhone,
-                        caregiverEmail: $caregiverEmail,
-                        isLoading: isLoading,
-                        errorMessage: errorMessage ?? "",
-                        onConfirm: {
-                            isLoading = true
-                            errorMessage = nil
-                            Task {
-                                do {
-                                    try await saveCaregiverIfProvided()
-                                    step = 3
-                                } catch {
-                                    // ignore errors but log or handle if needed
-                                }
-                                isLoading = false
-                            }
-                        },
-                        onSkip: {
-                            step = 3
-                        }
-                    )
-                case 3:
                     SignUpStep3WelcomeView(
+                        title: requiresEmailConfirmation ? "Check your email" : "Welcome!",
+                        message: requiresEmailConfirmation
+                            ? "Confirm your email, then return here and sign in."
+                            : "Your account is ready. Next, choose whether you are a patient or caregiver.",
+                        buttonTitle: requiresEmailConfirmation ? "Back to login" : "Choose my role",
                         onStart: {
-                            isLoading = true
-                            Task {
-                                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s delay
-                                await state.loadSupabaseSession()
-                                isLoading = false
-                            }
+                            dismiss()
                         }
                     )
                 default:
@@ -96,21 +63,24 @@ struct SignUpFlowView: View {
     // MARK: - Helpers
 
     private func createAccount() async throws {
-        let signUpResult = try await AuthService.shared.signUp(email: email, password: password)
-        _ = signUpResult // prevent unused warning
-    }
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let session = try await AuthService.shared.signUp(email: normalizedEmail, password: password)
 
-    private func saveCaregiverIfProvided() async throws {
-        // Minimal validation: caregiver first or last name not empty, and phone or email not empty
-        let hasName = !caregiverFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !caregiverLastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasContact = !caregiverPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !caregiverEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        guard hasName, hasContact else {
-            return // nothing to save
+        guard session != nil else {
+            requiresEmailConfirmation = true
+            step = 2
+            return
         }
 
-        // Persistence is disabled here to avoid missing module errors.
-        return
+        let displayName = "\(firstName) \(lastName)"
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try await ProfilesService.shared.ensureProfile(
+            displayName: displayName,
+            email: normalizedEmail
+        )
+        await state.loadSupabaseSession()
+        requiresEmailConfirmation = false
+        step = 2
     }
 }
 
