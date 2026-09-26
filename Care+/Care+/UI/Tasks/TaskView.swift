@@ -12,6 +12,7 @@ struct TasksTabView: View {
 
     @State private var selectedDate: Date = .now
     @State private var showCreateSheet = false
+    @State private var showMedicineInventory = false
     @State private var createPrefillKind: TaskKind = .event
 
     @State private var taskToDelete: TaskItem? = nil
@@ -100,6 +101,10 @@ struct TasksTabView: View {
                 )
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
+            }
+
+            .sheet(isPresented: $showMedicineInventory) {
+                MedicineInventoryView(state: state)
             }
 
             // ✅ Header sheets (Account / Settings)
@@ -290,7 +295,56 @@ private extension TasksTabView {
                         .foregroundStyle(AppTheme.textPrimary)
                 }
                 Spacer()
+
+                Button {
+                    showMedicineInventory = true
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } label: {
+                    Label("Cabinet", systemImage: "cross.case.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.primary)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 36)
+                        .background(AppTheme.primary.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens your medicine inventory")
             }
+
+            Button {
+                showMedicineInventory = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: medicineInventoryStatus.icon)
+                        .font(.headline)
+                        .foregroundStyle(medicineInventoryStatus.color)
+                        .frame(width: 36, height: 36)
+                        .background(medicineInventoryStatus.color.opacity(0.12))
+                        .clipShape(Circle())
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(medicineInventoryStatus.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(medicineInventoryStatus.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(12)
+                .background(AppTheme.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.stroke, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Medicine cabinet, \(medicineInventoryStatus.subtitle)")
 
             if todayMedications.isEmpty {
                 Text("No medication for this day.")
@@ -365,6 +419,23 @@ private extension TasksTabView {
             .padding(.top, 6)
         }
         .appCardStyle()
+    }
+
+    var medicineInventoryStatus: (title: String, subtitle: String, icon: String, color: Color) {
+        let expired = state.medicineInventory.filter { $0.expiryState() == .expired }.count
+        let expiring = state.medicineInventory.filter { $0.expiryState() == .expiringSoon }.count
+        let lowStock = state.medicineInventory.filter(\.isLowStock).count
+
+        if state.medicineInventory.isEmpty {
+            return ("Medicine cabinet", "Add what you have at home", "cross.case.fill", AppTheme.primary)
+        }
+        if expired > 0 {
+            return ("Check your cabinet", "\(expired) expired · \(lowStock) low stock", "exclamationmark.triangle.fill", AppTheme.danger)
+        }
+        if expiring > 0 || lowStock > 0 {
+            return ("Cabinet needs attention", "\(expiring) expiring · \(lowStock) low stock", "exclamationmark.triangle.fill", AppTheme.warning)
+        }
+        return ("Cabinet is up to date", "\(state.medicineInventory.count) medicines recorded", "checkmark.circle.fill", AppTheme.success)
     }
 
     var calendarCard: some View {

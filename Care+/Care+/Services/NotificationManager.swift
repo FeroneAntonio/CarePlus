@@ -105,6 +105,50 @@ final class NotificationManager: NSObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
     }
 
+    static func scheduleMedicineExpiryReminder(for item: MedicineInventoryItem) {
+        let center = UNUserNotificationCenter.current()
+        let identifier = medicineExpiryNotificationId(for: item.id)
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let expiryDay = calendar.startOfDay(for: item.expiryDate)
+        guard expiryDay >= today else { return }
+
+        let preferredDay = calendar.date(byAdding: .day, value: -30, to: expiryDay) ?? expiryDay
+        let reminderDay = max(preferredDay, today)
+        var components = calendar.dateComponents([.year, .month, .day], from: reminderDay)
+        components.hour = 9
+        components.minute = 0
+
+        guard var reminderDate = calendar.date(from: components) else { return }
+        if reminderDate <= .now {
+            reminderDate = Date().addingTimeInterval(5)
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Medicine expiry reminder"
+        content.body = "\(item.name) expires on \(item.expiryDate.formatted(date: .abbreviated, time: .omitted))."
+        content.sound = .default
+
+        let triggerComponents = calendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: reminderDate
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: triggerComponents, repeats: false)
+        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+    }
+
+    static func cancelMedicineExpiryReminder(for itemID: UUID) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [medicineExpiryNotificationId(for: itemID)]
+        )
+    }
+
+    private static func medicineExpiryNotificationId(for itemID: UUID) -> String {
+        "medicine_expiry_\(itemID.uuidString)"
+    }
+
     static func scheduleRepeatCallWarning(for contactName: String, phone: String?) {
         let content = UNMutableNotificationContent()
         content.title = "Attention"
@@ -176,4 +220,3 @@ final class NotificationManager: NSObject {
         }
     }
 }
-

@@ -78,6 +78,21 @@ alter table public.tasks add column if not exists created_at timestamptz not nul
 update public.tasks set payload = '""'::jsonb where payload is null;
 create unique index if not exists tasks_user_item_key on public.tasks(user_id, item_id);
 
+create table if not exists public.medicine_inventory (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  item_id uuid not null,
+  payload jsonb not null,
+  updated_at timestamptz not null,
+  created_at timestamptz not null,
+  primary key (user_id, item_id)
+);
+alter table public.medicine_inventory add column if not exists payload jsonb;
+alter table public.medicine_inventory add column if not exists updated_at timestamptz not null default now();
+alter table public.medicine_inventory add column if not exists created_at timestamptz not null default now();
+update public.medicine_inventory set payload = '""'::jsonb where payload is null;
+create unique index if not exists medicine_inventory_user_item_key
+  on public.medicine_inventory(user_id, item_id);
+
 create table if not exists public.diary_entries (
   user_id uuid not null references public.profiles(id) on delete cascade,
   item_id uuid not null,
@@ -232,6 +247,7 @@ alter table public.patient_details enable row level security;
 alter table public.caregiver_details enable row level security;
 alter table public.messages enable row level security;
 alter table public.tasks enable row level security;
+alter table public.medicine_inventory enable row level security;
 alter table public.diary_entries enable row level security;
 
 drop policy if exists profiles_select_self_or_partner on public.profiles;
@@ -368,6 +384,28 @@ with check (
   or exists (
     select 1 from public.care_links link
     where link.patient_id = diary_entries.user_id
+      and link.caregiver_id = auth.uid()
+      and link.status = 'active'
+  )
+);
+
+drop policy if exists medicine_inventory_owner_all on public.medicine_inventory;
+create policy medicine_inventory_owner_all on public.medicine_inventory
+for all to authenticated
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1 from public.care_links link
+    where link.patient_id = medicine_inventory.user_id
+      and link.caregiver_id = auth.uid()
+      and link.status = 'active'
+  )
+)
+with check (
+  user_id = auth.uid()
+  or exists (
+    select 1 from public.care_links link
+    where link.patient_id = medicine_inventory.user_id
       and link.caregiver_id = auth.uid()
       and link.status = 'active'
   )

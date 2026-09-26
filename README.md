@@ -21,6 +21,7 @@ The app provides a shared digital environment where daily care activities can be
 ## ✨ Key Features
 
 - 🗂 Task and medication management  
+- 💊 Home medicine cabinet with stock, purpose, storage location and expiry alerts
 - 📔 Personal diary (text, images, audio, and video)  
 - 💬 Persistent patient-caregiver chat
 - 📞 Contact and call management  

@@ -19,6 +19,7 @@
 8. Create, complete and delete a task from each account. Confirm the same state on the other account.
 9. Create and delete a diary entry. Confirm it does not reappear after sync.
 10. Confirm contacts and SOS selection from one account do not appear in the other account.
+11. Add, edit and remove a medicine cabinet item from each account. Confirm stock, purpose, location and expiry stay in sync and remain scoped to the linked patient after relaunch.
 
 ## Device-only checks
 
@@ -26,6 +27,8 @@
 - Pick a photo and a video for a diary entry and verify both remain available after relaunch.
 - Place a call from a physical iPhone and verify the call log is updated.
 - Check VoiceOver labels, Dynamic Type, keyboard avoidance and light/dark appearance.
+- Confirm medicine-cabinet filters, search, low-stock state and expired/expiring states are readable with VoiceOver and large Dynamic Type.
+- With notifications allowed, add a medicine expiring within 30 days and confirm an expiry reminder is scheduled.
 
 ## Known configuration work
 

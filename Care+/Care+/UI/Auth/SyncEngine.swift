@@ -5,6 +5,7 @@ enum SyncEngine {
     private static var pushTask: Task<Void, Never>?
 
     private static let tasksKey = "tasks_v1"
+    private static let medicineInventoryKey = "medicine_inventory_v1"
     private static let diaryKey = "diary_v1"
 
     static func fullSync(state: AppState) async {
@@ -22,6 +23,12 @@ enum SyncEngine {
             userId: ownerId,
             defaultValue: []
         )
+        let localInventory = Persistence.load(
+            [MedicineInventoryItem].self,
+            key: medicineInventoryKey,
+            userId: ownerId,
+            defaultValue: []
+        )
 
         struct RemoteRow: Decodable {
             let payload: Data
@@ -29,6 +36,7 @@ enum SyncEngine {
 
         let client = SupabaseClientProvider.shared.client
         var remoteTasks: [TaskItem] = []
+        var remoteInventory: [MedicineInventoryItem] = []
         var remoteDiary: [DiaryEntry] = []
 
         do {
@@ -43,6 +51,20 @@ enum SyncEngine {
             }
         } catch {
             print("Task sync download failed: \(error)")
+        }
+
+        do {
+            let rows: [RemoteRow] = try await client.database
+                .from("medicine_inventory")
+                .select("payload")
+                .eq("user_id", value: ownerId)
+                .execute()
+                .value
+            remoteInventory = rows.compactMap {
+                try? JSONDecoder().decode(MedicineInventoryItem.self, from: $0.payload)
+            }
+        } catch {
+            print("Medicine inventory sync download failed: \(error)")
         }
 
         do {
@@ -71,11 +93,23 @@ enum SyncEngine {
             id: { $0.id },
             updatedAt: { $0.updatedAt }
         )
+        let mergedInventory = mergeByUpdatedAt(
+            local: localInventory,
+            remote: remoteInventory,
+            id: { $0.id },
+            updatedAt: { $0.updatedAt }
+        )
 
         Persistence.save(mergedTasks, key: tasksKey, userId: ownerId)
+        Persistence.save(mergedInventory, key: medicineInventoryKey, userId: ownerId)
         Persistence.save(mergedDiary, key: diaryKey, userId: ownerId)
         state.tasks = mergedTasks
+        state.medicineInventory = mergedInventory
         state.diary = mergedDiary
+
+        for item in mergedInventory {
+            NotificationManager.scheduleMedicineExpiryReminder(for: item)
+        }
 
         schedulePush(state: state)
     }
@@ -95,6 +129,10 @@ enum SyncEngine {
 
     static func deleteDiaryEntry(id: UUID, state: AppState) async {
         await deleteRemoteItem(table: "diary_entries", id: id, state: state)
+    }
+
+    static func deleteMedicineInventoryItem(id: UUID, state: AppState) async {
+        await deleteRemoteItem(table: "medicine_inventory", id: id, state: state)
     }
 
     private static func deleteRemoteItem(table: String, id: UUID, state: AppState) async {
@@ -131,6 +169,14 @@ enum SyncEngine {
             let created_at: Date
         }
 
+        struct MedicineInventoryRow: Encodable {
+            let user_id: String
+            let item_id: String
+            let payload: Data
+            let updated_at: Date
+            let created_at: Date
+        }
+
         let taskRows = state.tasks.map { task in
             TaskRow(
                 user_id: ownerId,
@@ -148,6 +194,16 @@ enum SyncEngine {
                 payload: (try? JSONEncoder().encode(entry)) ?? Data(),
                 updated_at: entry.updatedAt,
                 created_at: entry.createdAt
+            )
+        }
+
+        let inventoryRows = state.medicineInventory.map { item in
+            MedicineInventoryRow(
+                user_id: ownerId,
+                item_id: item.id.uuidString,
+                payload: (try? JSONEncoder().encode(item)) ?? Data(),
+                updated_at: item.updatedAt,
+                created_at: item.createdAt
             )
         }
 
@@ -170,6 +226,17 @@ enum SyncEngine {
                     .execute()
             } catch {
                 print("Diary sync upload failed: \(error)")
+            }
+        }
+
+        if !inventoryRows.isEmpty {
+            do {
+                try await client.database
+                    .from("medicine_inventory")
+                    .upsert(inventoryRows, onConflict: "user_id,item_id")
+                    .execute()
+            } catch {
+                print("Medicine inventory sync upload failed: \(error)")
             }
         }
     }

@@ -16,6 +16,7 @@ final class AppState {
 
     // MARK: - Stored state
     var tasks: [TaskItem] = []
+    var medicineInventory: [MedicineInventoryItem] = []
     var diary: [DiaryEntry] = []
     var contacts: [ContactItem] = []
     var callEvents: [CallEvent] = []              // outgoing call log (from app)
@@ -63,6 +64,7 @@ final class AppState {
     private let callsKey = "call_events_v1"
     private let gamesKey = "game_results_v1"
     private let tasksKey = "tasks_v1"
+    private let medicineInventoryKey = "medicine_inventory_v1"
     private let diaryKey = "diary_v1"
     private let calmingEnabledKey = "calming_enabled_v1"
     private let calmingIntervalKey = "calming_interval_v1"
@@ -94,6 +96,7 @@ final class AppState {
 
         // tasks/diary: non carico global qui, verranno caricati per-user o lasciati vuoti
         tasks = []
+        medicineInventory = []
         diary = []
 
         hasCompletedOnboarding = UserDefaults.standard.bool(forKey: onboardingKey)
@@ -134,6 +137,12 @@ final class AppState {
     private func loadCareData(_ ownerId: String) {
         careDataOwnerId = ownerId
         tasks = Persistence.load([TaskItem].self, key: tasksKey, userId: ownerId, defaultValue: [])
+        medicineInventory = Persistence.load(
+            [MedicineInventoryItem].self,
+            key: medicineInventoryKey,
+            userId: ownerId,
+            defaultValue: []
+        )
         diary = Persistence.load([DiaryEntry].self, key: diaryKey, userId: ownerId, defaultValue: [])
     }
 
@@ -260,6 +269,15 @@ final class AppState {
         }
     }
 
+    func saveMedicineInventory() {
+        if let ownerId = careDataOwnerId ?? sessionUserId {
+            Persistence.save(medicineInventory, key: medicineInventoryKey, userId: ownerId)
+            SyncEngine.schedulePush(state: self)
+        } else {
+            Persistence.save(medicineInventory, key: medicineInventoryKey)
+        }
+    }
+
     func saveDiary() {
         if let ownerId = careDataOwnerId ?? sessionUserId {
             Persistence.save(diary, key: diaryKey, userId: ownerId)
@@ -363,6 +381,7 @@ final class AppState {
         careLinkStatus = nil
 
         tasks = []
+        medicineInventory = []
         diary = []
         contacts = []
         callEvents = []
@@ -609,6 +628,7 @@ extension AppState {
                 self.loadUserData("guest")
             } else {
                 self.tasks = []
+                self.medicineInventory = []
                 self.diary = []
                 self.contacts = []
                 self.callEvents = []
