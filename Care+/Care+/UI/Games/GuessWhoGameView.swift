@@ -142,7 +142,8 @@ struct GuessWhoGameView: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppTheme.stroke))
         }
         .buttonStyle(.plain)
-        .disabled(revealed || isWrong)
+        .opacity(revealed && !isAnswer ? 0.5 : 1)
+        .allowsHitTesting(!revealed && !isWrong)
     }
 
     private func feedback(for target: ContactItem) -> String {

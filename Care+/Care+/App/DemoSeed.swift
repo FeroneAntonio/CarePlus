@@ -63,6 +63,21 @@ enum DemoSeed {
         }, "game_results_v1")
     }
 
+    /// Sample conversation shown in guest mode when demo data is enabled.
+    static func chatMessages() -> [ChatMessage]? {
+        guard ProcessInfo.processInfo.environment["CAREPLUS_DEMO_SEED"] == "1" else { return nil }
+        func at(_ h: Int, _ m: Int) -> Date {
+            Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: .now) ?? .now
+        }
+        return [
+            ChatMessage(senderId: "giulia", text: "Good morning Mum! Did you take the pill after breakfast?", date: at(8, 12), isFromCurrentUser: false),
+            ChatMessage(senderId: "me", text: "Yes, I ticked it in the app 😊", date: at(8, 15), isFromCurrentUser: true),
+            ChatMessage(senderId: "giulia", text: "Great. I'll pick you up at 10:30 for our walk.", date: at(8, 17), isFromCurrentUser: false),
+            ChatMessage(senderId: "me", text: "I'll be ready. Can we stop at the bakery?", date: at(9, 20), isFromCurrentUser: true),
+            ChatMessage(senderId: "giulia", text: "Of course ❤️", date: at(9, 22), isFromCurrentUser: false),
+        ]
+    }
+
     private static func save<T: Encodable>(_ v: T, _ key: String) {
         Persistence.save(v, key: key, userId: "guest")
     }

@@ -24,6 +24,15 @@ final class ChatViewModel: ObservableObject {
         errorMessage = nil
         messages = []
 
+        #if DEBUG
+        if state.isGuest, let demo = DemoSeed.chatMessages() {
+            partnerName = "Giulia"
+            messages = demo
+            isLoading = false
+            return
+        }
+        #endif
+
         guard let userId = state.sessionUserId else {
             isLoading = false
             errorMessage = ChatServiceError.unauthenticated.localizedDescription

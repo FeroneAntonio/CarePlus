@@ -81,7 +81,7 @@ struct AppPillButtonStyle: ButtonStyle {
     
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(AppTheme.textPrimary)
+            .foregroundStyle(role == .primary ? Color.white : Color.black.opacity(0.85))
             .padding(padding)
             .background(
                 Capsule()

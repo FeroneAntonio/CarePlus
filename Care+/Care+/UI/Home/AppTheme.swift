@@ -126,4 +126,13 @@ public enum AppTheme {
     public static var danger: Color { dynamic(\.danger) }
     public static var secondary: Color { dynamic(\.secondary) }
     public static var disabled: Color { dynamic(\.disabled) }
+
+    /// Warning hue dark enough for text on light surfaces (the fill yellow is too pale).
+    public static var warningText: Color {
+        Color(uiColor: UIColor { trait in
+            trait.userInterfaceStyle == .dark
+            ? UIColor(dark.warning)
+            : UIColor(red: 0.62, green: 0.43, blue: 0.0, alpha: 1)
+        })
+    }
 }

@@ -498,7 +498,7 @@ private extension ExpiryState {
     var color: Color {
         switch self {
         case .ok: return AppTheme.success
-        case .expiringSoon: return AppTheme.warning
+        case .expiringSoon: return AppTheme.warningText
         case .expired: return AppTheme.danger
         }
     }
