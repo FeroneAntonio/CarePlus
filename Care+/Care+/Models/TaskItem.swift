@@ -95,7 +95,7 @@ public struct TaskItem: Codable, Identifiable, Hashable, Sendable {
             phone: phone,
             notificationId: notificationId,
             createdAt: createdAt,
-            // ✅ important: updatedAt should reflect "creation moment" too
+            // important: updatedAt should reflect "creation moment" too
             updatedAt: max(createdAt, now)
         )
     }
@@ -109,22 +109,4 @@ public struct TaskItem: Codable, Identifiable, Hashable, Sendable {
     public mutating func touch() {
         updatedAt = Date()
     }
-
-    // MARK: - Samples
-    public static let sampleItems: [TaskItem] = [
-        TaskItem(
-            title: "Buy groceries",
-            notes: "Milk, eggs, bread",
-            kind: .event,
-            isCompleted: false,
-            dueDate: Calendar.current.date(byAdding: .day, value: 1, to: Date())
-        ),
-        TaskItem(
-            title: "Finish project report",
-            notes: "Due end of this week",
-            kind: .event,
-            isCompleted: false,
-            dueDate: Calendar.current.date(byAdding: .day, value: 3, to: Date())
-        )
-    ]
 }

@@ -307,16 +307,23 @@ final class AppState {
     func setCalmingReminders(enabled: Bool) {
         calmingRemindersEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: calmingEnabledKey)
+        rescheduleCalmingReminders()
     }
 
     func setCalmingInterval(minutes: Int) {
         calmingIntervalMinutes = minutes
         UserDefaults.standard.set(minutes, forKey: calmingIntervalKey)
+        rescheduleCalmingReminders()
     }
 
-    func setLanguage(code: String) {
-        selectedLanguageCode = code
-        UserDefaults.standard.set(code, forKey: languageKey)
+    /// Replaces pending calming notifications so they always match the current settings.
+    private func rescheduleCalmingReminders() {
+        Task {
+            await NotificationManager.cancelCalmingReminders()
+            if calmingRemindersEnabled {
+                NotificationManager.scheduleCalmingReminders(intervalMinutes: calmingIntervalMinutes)
+            }
+        }
     }
 
     func setGuest(_ enabled: Bool) {
@@ -394,11 +401,6 @@ final class AppState {
     }
 
     // MARK: - Contacts helpers
-    func canAddContact(name: String, relation: String?) -> Bool {
-        let temp = ContactItem(name: name, relation: relation)
-        return !contacts.contains(where: { $0.uniqueKey == temp.uniqueKey })
-    }
-
     func upsertContact(_ contact: ContactItem) {
         if let idx = contacts.firstIndex(where: { $0.id == contact.id }) {
             contacts[idx] = contact
@@ -454,17 +456,6 @@ final class AppState {
             if a.count != b.count { return a.count > b.count }
             return (a.last ?? .distantPast) > (b.last ?? .distantPast)
         }
-    }
-
-    func lastNDaysCallRanking(days: Int = 30, now: Date = .now) -> [(contactKey: String, total: Int)] {
-        let range = romeLastNDaysRangeEndingToday(days: days, now: now)
-        let filtered = callEvents.filter { $0.timestamp >= range.from && $0.timestamp < range.to }
-
-        var dict: [String: Int] = [:]
-        for e in filtered { dict[e.contactKey, default: 0] += 1 }
-
-        return dict.map { ($0.key, $0.value) }
-            .sorted { $0.total > $1.total }
     }
 
     func callsPerDayLastNDays(days: Int = 14, now: Date = .now) -> [(dayStart: Date, count: Int)] {

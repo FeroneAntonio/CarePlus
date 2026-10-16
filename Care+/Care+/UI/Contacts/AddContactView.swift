@@ -6,10 +6,6 @@ struct AddContactView: View {
     var onAdd: (ContactItem) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
-    private var iconColor: Color { AppTheme.primary }
-
     @StateObject private var recorder = AudioRecorder()
     @State private var name = ""
     @State private var relation = ""
@@ -27,10 +23,10 @@ struct AddContactView: View {
             Screen {
                 VStack(spacing: 20) {
                     CardDark {
-                        Text("New contact").font(.title2.bold()).foregroundStyle(textPrimary)
+                        Text("New contact").font(.title2.bold()).foregroundStyle(AppTheme.textPrimary)
                         HStack(spacing: 12) {
                             PhotosPicker(selection: $avatarItem, matching: .images) { Avatar(photo: avatarData).frame(width: 64, height: 64) }
-                            Text("Tap avatar to add photo").font(.subheadline).foregroundStyle(textSecondary)
+                            Text("Tap avatar to add photo").font(.subheadline).foregroundStyle(AppTheme.textSecondary)
                         }
                         LabeledField(label: "Name (required)", placeholder: "Name", text: $name)
                         LabeledField(label: "Role (unique)", placeholder: "e.g. Daughter", text: $relation)
@@ -63,7 +59,7 @@ struct AddContactView: View {
                     }
 
                     CardDark {
-                        Text("Voice Note").font(.headline).foregroundStyle(textPrimary)
+                        Text("Voice Note").font(.headline).foregroundStyle(AppTheme.textPrimary)
                         Button {
                             if recorder.isRecording { recorder.stop(); recordedURL = recorder.lastRecordingURL }
                             else { recorder.start() }
@@ -112,7 +108,7 @@ struct AddContactView: View {
                             Text("Indietro")
                         }
                     }
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(AppTheme.textPrimary)
                 }
             }
         }

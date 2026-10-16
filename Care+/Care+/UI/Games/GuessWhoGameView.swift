@@ -2,373 +2,218 @@
 //  GuessWhoGameView.swift
 //  Care+
 //
+//  "Who is this?" — recognise familiar faces from the patient's own contacts.
+//
 
 import SwiftUI
 
 struct GuessWhoGameView: View {
     @Bindable var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
 
-    private var textPrimary: Color { scheme == .dark ? .white : AppTheme.iconLight }
-    private var textSecondary: Color { scheme == .dark ? .white.opacity(0.75) : AppTheme.iconLight.opacity(0.70) }
-    private var iconColor: Color { scheme == .dark ? .white : AppTheme.iconLight }
-
-    // Game config
-    private let totalRounds = 10
+    private let totalRounds = 5
     private let optionsCount = 4
+    /// After this many wrong answers the right one is shown, so a round never becomes frustrating.
+    private let maxAttempts = 2
 
-    // Runtime
     @State private var startedAt: Date?
-    @State private var elapsedSeconds: Int = 0
+    @State private var roundIndex = 0
+    @State private var target: ContactItem?
+    @State private var options: [ContactItem] = []
+    @State private var wrongPicks: Set<UUID> = []
+    @State private var revealed = false
+    @State private var results: [GuessWhoRoundResult] = []
+    @State private var finished: GameSessionResult?
 
-    @State private var roundIndex: Int = 0
-    @State private var currentTarget: ContactItem?
-    @State private var currentOptions: [ContactItem] = []
-
-    @State private var selectedKey: String? = nil
-    @State private var revealState: RevealState = .idle
-
-    @State private var attemptsThisRound: Int = 0
-    @State private var correctCount: Int = 0
-    @State private var totalAttempts: Int = 0
-
-    @State private var roundResults: [GuessWhoRoundResult] = []
-
-    @State private var showFinish = false
-    @State private var lastMessage: String = ""
-
-    enum RevealState { case idle, correct, wrong }
-
-    private var eligibleContacts: [ContactItem] {
-        state.contacts.filter {
-            Validators.nonEmpty($0.name)
-            && Validators.nonEmpty($0.relation ?? "")
-            && $0.photoData != nil
-        }
+    /// Contacts usable in the game: they need a name and a photo.
+    private var eligible: [ContactItem] {
+        state.contacts.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty && $0.photoData != nil }
     }
 
-    private var canStart: Bool { eligibleContacts.count >= 5 }
+    private var correctCount: Int { results.filter(\.isCorrect).count }
 
     var body: some View {
-        Screen {
-            CardDark {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Guess Who")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(textPrimary)
-
-                        Text("Round \(min(roundIndex + 1, totalRounds))/\(totalRounds)")
-                            .font(.caption)
-                            .foregroundStyle(textSecondary)
-                    }
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 6) {
-                        MiniChip(icon: "timer", text: "\(elapsedSeconds)s")
-                        MiniChip(icon: "checkmark.circle", text: "\(correctCount)/\(totalRounds)")
-                    }
-                }
-
-                if !canStart {
-                    Text("To start, add at least 5 contacts with: Name + Role + Photo.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.top, 6)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 16) {
+                if startedAt == nil {
+                    introCard
+                } else if let target {
+                    roundView(target)
                 }
             }
-
-            if startedAt == nil {
-                CardDark {
-                    Text("Ready?")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(textPrimary)
-
-                    Button {
-                        startGame()
-                    } label: {
-                        Text("START (10 rounds)")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 56)
-                            .background(Color.white)
-                            .foregroundStyle(.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .opacity(canStart ? 1 : 0.45)
-                    }
-                    .disabled(!canStart)
-
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("Back")
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.top, 6)
-                    }
-                }
-            } else {
-                if let target = currentTarget {
-                    CardDark {
-                        Text("Who is this?")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(textPrimary)
-
-                        if let data = target.photoData, let ui = UIImage(data: data) {
-                            Image(uiImage: ui)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 220)
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color.white.opacity(0.10))
-                                .frame(height: 220)
-                                .overlay(Text("Missing photo").foregroundStyle(textSecondary))
-                        }
-
-                        if !lastMessage.isEmpty {
-                            Text(lastMessage)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(revealState == .correct ? .green : (revealState == .wrong ? .red : textSecondary))
-                                .padding(.top, 6)
-                        }
-                    }
-
-                    // Options
-                    CardDark {
-                        VStack(spacing: 10) {
-                            ForEach(currentOptions, id: \.uniqueKey) { c in
-                                optionButton(contact: c, target: target)
-                            }
-
-                            HStack(spacing: 10) {
-                                Button {
-                                    nextRound()
-                                } label: {
-                                    Text(roundIndex == totalRounds - 1 ? "FINISH" : "NEXT")
-                                        .font(.headline)
-                                        .frame(maxWidth: .infinity, minHeight: 52)
-                                        .background(Color.white)
-                                        .foregroundStyle(.black)
-                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                }
-                                .disabled(revealState == .idle) // must attempt at least once
-
-                                Button {
-                                    retryRound()
-                                } label: {
-                                    Text("RETRY")
-                                        .font(.headline)
-                                        .frame(maxWidth: .infinity, minHeight: 52)
-                                        .background(Color.white.opacity(0.18))
-                                        .foregroundStyle(.white)
-                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 18)
-                                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                        )
-                                }
-                                .disabled(revealState != .wrong)
-                            }
-                        }
-                    }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 120)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle("Who is this?")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if startedAt != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Text("\(roundIndex + 1) of \(totalRounds)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
-        .onAppear {
-            // timer loop
-            Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-                guard let startedAt else { return }
-                let diff = Int(Date().timeIntervalSince(startedAt))
-                DispatchQueue.main.async { elapsedSeconds = max(0, diff) }
-            }
-        }
-        .fullScreenCover(isPresented: $showFinish) {
-            GuessWhoFinishView(
-                state: state,
-                durationSeconds: elapsedSeconds,
-                correctCount: correctCount,
-                totalRounds: totalRounds,
-                totalAttempts: totalAttempts,
-                roundResults: roundResults,
-                onRetry: {
-                    resetAndStartAgain()
-                },
-                onClose: {
-                    dismiss()
-                }
-            )
+        .fullScreenCover(item: $finished) { session in
+            GuessWhoFinishView(session: session, onRetry: start, onClose: { dismiss() })
         }
     }
 
-    // MARK: - UI helpers
+    // MARK: - Views
 
-    @ViewBuilder
-    private func optionButton(contact: ContactItem, target: ContactItem) -> some View {
-        let isSelected = (selectedKey == contact.uniqueKey)
-        let isCorrectOption = (contact.uniqueKey == target.uniqueKey)
+    private var introCard: some View {
+        CardDark {
+            Image(systemName: "person.crop.square.on.square.angled.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(AppTheme.primary)
+            Text("Recognise the people you love")
+                .font(.title2.bold())
+                .foregroundStyle(AppTheme.textPrimary)
+            Text("A photo appears: choose the right name. \(totalRounds) short rounds, no rush.")
+                .foregroundStyle(AppTheme.textSecondary)
 
-        let borderColor: Color = {
-            switch revealState {
-            case .idle:
-                return isSelected ? Color.white.opacity(0.6) : Color.white.opacity(0.18)
-            case .correct:
-                return isCorrectOption ? .green : Color.white.opacity(0.10)
-            case .wrong:
-                if isCorrectOption { return .green }
-                if isSelected { return .red }
-                return Color.white.opacity(0.10)
+            if eligible.count < optionsCount {
+                Label("Add a photo to at least \(optionsCount) contacts to play. You have \(eligible.count).",
+                      systemImage: "info.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
-        }()
 
-        Button {
-            choose(contact: contact, target: target)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(contact.name)
-                        .font(.headline)
-                        .foregroundStyle(textPrimary)
-                    if let r = contact.relation, !r.isEmpty {
-                        Text(r)
-                            .font(.caption)
-                            .foregroundStyle(textSecondary)
-                    }
+            Button(action: start) {
+                Text("Start")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(AppTheme.primary, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(eligible.count < optionsCount)
+            .opacity(eligible.count < optionsCount ? 0.4 : 1)
+        }
+    }
+
+    private func roundView(_ target: ContactItem) -> some View {
+        VStack(spacing: 16) {
+            ProgressView(value: Double(roundIndex), total: Double(totalRounds))
+                .tint(AppTheme.primary)
+
+            if let data = target.photoData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .accessibilityLabel("Photo of the person to recognise")
+            }
+
+            Text(feedback(for: target))
+                .font(.headline)
+                .foregroundStyle(revealed ? (wrongPicks.isEmpty ? AppTheme.success : AppTheme.primary) : AppTheme.textSecondary)
+                .frame(minHeight: 24)
+                .animation(.default, value: revealed)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(options) { option in
+                    optionButton(option, target: target)
                 }
-                Spacer()
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(Color.white.opacity(0.10))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(borderColor, lineWidth: 2)
-            )
+        }
+    }
+
+    private func optionButton(_ option: ContactItem, target: ContactItem) -> some View {
+        let isAnswer = option.id == target.id
+        let isWrong = wrongPicks.contains(option.id)
+        let fill: Color = revealed && isAnswer ? AppTheme.success : isWrong ? AppTheme.danger.opacity(0.15) : AppTheme.surface
+
+        return Button { choose(option, target: target) } label: {
+            VStack(spacing: 2) {
+                Text(option.name)
+                    .font(.title3.weight(.semibold))
+                if let relation = option.relation, !relation.isEmpty {
+                    Text(relation).font(.caption)
+                }
+            }
+            .foregroundStyle(revealed && isAnswer ? .white : AppTheme.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 84)
+            .background(fill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AppTheme.stroke))
         }
         .buttonStyle(.plain)
-        .disabled(revealState == .correct) // after correct, lock options
+        .opacity(revealed && !isAnswer ? 0.5 : 1)
+        .allowsHitTesting(!revealed && !isWrong)
+    }
+
+    private func feedback(for target: ContactItem) -> String {
+        if revealed { return wrongPicks.isEmpty ? "Yes, it's \(target.name)!" : "This is \(target.name)." }
+        return wrongPicks.isEmpty ? "Who is this?" : "Not quite, try again."
     }
 
     // MARK: - Game flow
 
-    private func startGame() {
-        guard canStart else { return }
-        startedAt = Date()
-        elapsedSeconds = 0
+    private func start() {
+        finished = nil
+        startedAt = .now
         roundIndex = 0
-        correctCount = 0
-        totalAttempts = 0
-        roundResults = []
+        results = []
         prepareRound()
     }
 
-    private func resetAndStartAgain() {
-        startedAt = nil
-        selectedKey = nil
-        revealState = .idle
-        attemptsThisRound = 0
-        lastMessage = ""
-        currentTarget = nil
-        currentOptions = []
-        showFinish = false
-        startGame()
-    }
-
     private func prepareRound() {
-        guard canStart else { return }
-
-        selectedKey = nil
-        revealState = .idle
-        attemptsThisRound = 0
-        lastMessage = ""
-
-        // target random (can repeat across rounds)
-        let target = eligibleContacts.randomElement()
-        currentTarget = target
-
-        guard let target else { return }
-
-        // pick 3 other random different contacts
-        var pool = eligibleContacts.filter { $0.uniqueKey != target.uniqueKey }
-        pool.shuffle()
-        let others = Array(pool.prefix(optionsCount - 1))
-
-        var options = others + [target]
-        options.shuffle()
-        currentOptions = options
+        wrongPicks = []
+        revealed = false
+        let picked = eligible.shuffled().prefix(optionsCount)
+        target = picked.first
+        options = picked.shuffled()
     }
 
-    private func choose(contact: ContactItem, target: ContactItem) {
-        // ignore if already correct
-        if revealState == .correct { return }
-
-        attemptsThisRound += 1
-        totalAttempts += 1
-
-        selectedKey = contact.uniqueKey
-
-        if contact.uniqueKey == target.uniqueKey {
-            revealState = .correct
-            correctCount += 1
-            lastMessage = "Great! +1 ✅"
+    private func choose(_ option: ContactItem, target: ContactItem) {
+        if option.id == target.id {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            revealed = true
         } else {
-            revealState = .wrong
-            lastMessage = "Almost! Want to retry or go next?"
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            wrongPicks.insert(option.id)
+            revealed = wrongPicks.count >= maxAttempts
         }
-    }
+        guard revealed else { return }
 
-    private func retryRound() {
-        // keep same target+options, just let user try again (attempts count continues)
-        revealState = .idle
-        selectedKey = nil
-        lastMessage = "Try again 💜"
+        results.append(GuessWhoRoundResult(
+            roundIndex: roundIndex,
+            contactKey: target.uniqueKey,
+            isCorrect: wrongPicks.isEmpty,
+            attempts: wrongPicks.count + (option.id == target.id ? 1 : 0)
+        ))
+
+        Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            nextRound()
+        }
     }
 
     private func nextRound() {
-        guard let target = currentTarget else { return }
-        guard revealState != .idle else { return } // must have attempted
-
-        let isCorrect = (revealState == .correct)
-        roundResults.append(
-            GuessWhoRoundResult(
-                roundIndex: roundIndex,
-                contactKey: target.uniqueKey,
-                isCorrect: isCorrect,
-                attempts: max(1, attemptsThisRound)
-            )
-        )
-
-        if roundIndex >= totalRounds - 1 {
-            finishGame()
-        } else {
-            roundIndex += 1
-            prepareRound()
+        if roundIndex < totalRounds - 1 {
+            withAnimation(.snappy) {
+                roundIndex += 1
+                prepareRound()
+            }
+            return
         }
-    }
 
-    private func finishGame() {
-        showFinish = true
-
-        let started = startedAt ?? Date()
-        let finished = Date()
-
-        let result = GameSessionResult(
+        let start = startedAt ?? .now
+        let session = GameSessionResult(
             type: .guessWho,
-            startedAt: started,
-            finishedAt: finished,
-            durationSeconds: elapsedSeconds,
+            startedAt: start,
+            finishedAt: .now,
+            durationSeconds: Int(Date.now.timeIntervalSince(start)),
             totalRounds: totalRounds,
             correctCount: correctCount,
-            totalAttempts: totalAttempts,
-            roundResults: roundResults
+            totalAttempts: results.map(\.attempts).reduce(0, +),
+            roundResults: results
         )
-
-        state.addGameResult(result)
+        state.addGameResult(session)
+        finished = session
     }
 }
-

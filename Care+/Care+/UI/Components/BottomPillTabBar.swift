@@ -8,13 +8,13 @@ struct BottomPillTabBar: View {
     @Binding var selected: BottomTab
     @Environment(\.colorScheme) private var scheme
 
-    // ✅ Altezza fissa coerente con le altre schermate
+    // Altezza fissa coerente con le altre schermate
     private let barHeight: CGFloat = 64
 
     var body: some View {
         HStack(spacing: 16) {
 
-            // ✅ HUB ALL’ESTREMA SINISTRA
+            // HUB ALL’ESTREMA SINISTRA
             tab(.home, "Hub", "house.fill")
 
             tab(.tasks, "Tasks", "checklist")
@@ -22,12 +22,12 @@ struct BottomPillTabBar: View {
             tab(.games, "Games", "gamecontroller.fill")
             tab(.contacts, "Contacts", "person.2.fill")
         }
-        .frame(height: barHeight)                 // ✅ altezza fissa
+        .frame(height: barHeight)                 // altezza fissa
         .padding(.horizontal, 12)
         .background(
             Capsule()
                 .fill(AppTheme.surface)
-                .frame(height: barHeight)         // ✅ capsule stessa altezza
+                .frame(height: barHeight)         // capsule stessa altezza
                 .overlay(
                     Capsule()
                         .fill(
@@ -95,7 +95,7 @@ struct BottomPillTabBar: View {
                         : (scheme == .dark ? AppTheme.textSecondary : AppTheme.primary.opacity(0.45))
                     )
             }
-            .frame(maxWidth: .infinity)     // ✅ allineamento uniforme
+            .frame(maxWidth: .infinity)     // allineamento uniforme
             .padding(.vertical, 6)
         }
         .contentShape(Rectangle())

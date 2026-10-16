@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// UNICO AppTheme: all colors used in Views should come from here.
 ///
@@ -99,43 +100,39 @@ public enum AppTheme {
         )
     }
     
-    // MARK: - Current Palette Selection
-    
-    private static var current: Palette {
-        #if canImport(UIKit)
-        switch UITraitCollection.current.userInterfaceStyle {
-        case .dark:
-            return dark
-        default:
-            return light
-        }
-        #else
-        return light
-        #endif
+    // MARK: - Dynamic Resolution
+
+    /// Resolves the token per trait collection, so colors follow light/dark changes
+    /// even when a view is not re-rendered (sheets, cached cells, UIKit bridges).
+    private static func dynamic(_ token: KeyPath<Palette, Color>) -> Color {
+        Color(uiColor: UIColor { trait in
+            UIColor(trait.userInterfaceStyle == .dark ? dark[keyPath: token] : light[keyPath: token])
+        })
     }
-    
+
     // MARK: - Public Tokens
-    
-    public static var background: Color { current.background }
-    public static var surface: Color { current.surface }
-    public static var surface2: Color { current.surface2 }
-    public static var stroke: Color { current.stroke }
-    public static var shadow: Color { current.shadow }
-    public static var textPrimary: Color { current.textPrimary }
-    public static var textSecondary: Color { current.textSecondary }
-    public static var primary: Color { current.primary }
-    public static var primaryMuted: Color { current.primaryMuted }
-    public static var warning: Color { current.warning }
-    public static var success: Color { current.success }
-    public static var danger: Color { current.danger }
-    public static var secondary: Color { current.secondary }
-    public static var disabled: Color { current.disabled }
-    
-    // MARK: - Compatibility Aliases
-    
-    public static var textOnSurfaceSecondary: Color { textSecondary }
-    public static var textOnSurfacePrimary: Color { textPrimary }
-    public static var onSurface: Color { textPrimary }
-    public static var surfaceBackground: Color { surface }
-    public static var backgroundPrimary: Color { background }
+
+    public static var background: Color { dynamic(\.background) }
+    public static var surface: Color { dynamic(\.surface) }
+    public static var surface2: Color { dynamic(\.surface2) }
+    public static var stroke: Color { dynamic(\.stroke) }
+    public static var shadow: Color { dynamic(\.shadow) }
+    public static var textPrimary: Color { dynamic(\.textPrimary) }
+    public static var textSecondary: Color { dynamic(\.textSecondary) }
+    public static var primary: Color { dynamic(\.primary) }
+    public static var primaryMuted: Color { dynamic(\.primaryMuted) }
+    public static var warning: Color { dynamic(\.warning) }
+    public static var success: Color { dynamic(\.success) }
+    public static var danger: Color { dynamic(\.danger) }
+    public static var secondary: Color { dynamic(\.secondary) }
+    public static var disabled: Color { dynamic(\.disabled) }
+
+    /// Warning hue dark enough for text on light surfaces (the fill yellow is too pale).
+    public static var warningText: Color {
+        Color(uiColor: UIColor { trait in
+            trait.userInterfaceStyle == .dark
+            ? UIColor(dark.warning)
+            : UIColor(red: 0.62, green: 0.43, blue: 0.0, alpha: 1)
+        })
+    }
 }

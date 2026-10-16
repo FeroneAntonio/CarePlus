@@ -13,7 +13,7 @@ struct Screen<Content: View>: View {
 
     var body: some View {
         ZStack {
-            // ✅ Background coerente sempre
+            // Background coerente sempre
             AppBackground()
 
             ScrollView(showsIndicators: false) {
@@ -29,9 +29,9 @@ struct Screen<Content: View>: View {
                 Color.clear.frame(height: 16)
             }
         }
-        // ✅ toolbar coerente con lo schema corrente
+        // toolbar coerente con lo schema corrente
         .toolbarColorScheme(scheme == .dark ? .dark : .light, for: .navigationBar)
-        // ✅ evita che alcune view “vedano” un background diverso in stack/sheet
+        // evita che alcune view “vedano” un background diverso in stack/sheet
         .background(AppTheme.background.ignoresSafeArea())
     }
 }

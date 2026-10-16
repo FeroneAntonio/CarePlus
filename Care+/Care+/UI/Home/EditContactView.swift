@@ -18,7 +18,7 @@ struct EditContactView: View {
     @State private var phone: String
     @State private var email: String
 
-    // ✅ Photo editing
+    // Photo editing
     @State private var photoPickerItem: PhotosPickerItem? = nil
     @State private var photoData: Data? = nil
 
@@ -37,7 +37,7 @@ struct EditContactView: View {
         _relation = State(initialValue: contact.relation ?? "")
         _phone = State(initialValue: contact.phone ?? "")
         _email = State(initialValue: contact.email ?? "")
-        _photoData = State(initialValue: contact.photoData) // ✅ start from existing photo
+        _photoData = State(initialValue: contact.photoData) // start from existing photo
     }
 
     var body: some View {
@@ -52,7 +52,7 @@ struct EditContactView: View {
                         .keyboardType(.emailAddress)
                 }
 
-                // ✅ PHOTO (editable)
+                // PHOTO (editable)
                 Section(header: Text("Photo")) {
                     HStack(spacing: 12) {
                         avatarPreview
@@ -178,7 +178,7 @@ struct EditContactView: View {
                         Button(role: .destructive) {
                             showDeleteAlert = true
                         } label: {
-                            Text("Elimina contatto")
+                            Text("Delete contact")
                         }
                         Spacer()
                     }
@@ -213,17 +213,17 @@ struct EditContactView: View {
                 showRecorderSheet = false
             }
         }
-        .alert("Eliminare questo contatto?", isPresented: $showDeleteAlert) {
-            Button("Elimina", role: .destructive) {
+        .alert("Delete this contact?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) {
                 if let index = state.contacts.firstIndex(where: { $0.id == contact.id }) {
                     state.contacts.remove(at: index)
                     state.saveContacts()
                 }
                 dismiss()
             }
-            Button("Annulla", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Questa azione non può essere annullata.")
+            Text("This action cannot be undone.")
         }
     }
 
@@ -252,10 +252,10 @@ struct EditContactView: View {
         updated.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : phone
         updated.email = email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : email
 
-        // ✅ SAVE PHOTO
+        // SAVE PHOTO
         updated.photoData = photoData
 
-        // ✅ SAVE AUDIO
+        // SAVE AUDIO
         if let tempURL = tempRecordedURL {
             updated.audioNoteURL = tempURL
         }

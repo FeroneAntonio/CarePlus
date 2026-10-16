@@ -4,168 +4,109 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct GamesView: View {
     @Bindable var state: AppState
-    @Environment(\.colorScheme) private var scheme
+    @State private var showStats = false
 
-    private var textPrimary: Color { scheme == .dark ? .white : AppTheme.iconLight }
-    private var textSecondary: Color { scheme == .dark ? .white.opacity(0.75) : AppTheme.iconLight.opacity(0.70) }
-    private var iconColor: Color { scheme == .dark ? .white : AppTheme.iconLight }
+    private let dailyGoal = 3
+    private let upcoming = [("game_attention", "Attention"), ("game_logic", "Logic"), ("game_difference", "What Difference?")]
+
+    private var gamesDoneToday: Int { min(dailyGoal, state.gameSessions(on: .now).count) }
 
     var body: some View {
         NavigationStack {
-            Screen {
-                // Today's activities card
-                CardDark {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "puzzlepiece.fill")
-                                .font(.headline)
-                                .foregroundStyle(iconColor)
-                            Text("Today's activities")
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(iconColor)
-                            Spacer()
-                        }
-
-                        let gamesDoneToday = min(3, state.gameSessions(on: .now).count)
-                        Text(gamesDoneToday == 0
-                             ? "You completed 0/3 memory games"
-                             : "Great! You completed \(gamesDoneToday)/3 memory games")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(textPrimary)
-
-                        ProgressView(value: Double(gamesDoneToday), total: 3.0)
-                            .tint(Color.white.opacity(0.9))
-
-                        Button {
-                            // Placeholder for objectives
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        } label: {
-                            Text("Objectives")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .background(Color.white.opacity(0.92))
-                                .foregroundStyle(.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 4)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 16) {
+                    TabHeader(state: state, title: "Games")
+                    todayCard
+                    gamesCard
                 }
-
-                // Games grid card
-                CardDark {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.headline)
-                                .foregroundStyle(iconColor)
-                            Text("Games")
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(iconColor)
-                            Spacer()
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 120)
+            }
+            .background(AppTheme.background.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showStats) {
+                NavigationStack {
+                    GamesStatsView(state: state)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showStats = false }
+                            }
                         }
-
-                        Text("Train your memory")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(textPrimary)
-
-                        // 2x2 grid
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
-                            // Memory (active)
-                            NavigationLink {
-                                GuessWhoGameView(state: state)
-                            } label: {
-                                gameTileImage(title: "Memory", imageCandidates: ["game_memory", "Memory", "memory"])
-                            }
-                            .buttonStyle(.plain)
-
-                            // Attention (coming soon)
-                            Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            } label: {
-                                gameTileImage(title: "Attention", imageCandidates: ["game_attention", "Attention", "attention"]).overlay(comingSoonOverlay)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(true)
-
-                            // Logic (coming soon)
-                            Button {} label: {
-                                gameTileImage(title: "Logic", imageCandidates: ["game_logic", "Logic", "logic"]).overlay(comingSoonOverlay)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(true)
-
-                            // What Difference? (coming soon)
-                            Button {} label: {
-                                gameTileImage(title: "What Difference?", imageCandidates: ["game_difference", "what_difference", "WhatDifference", "What Difference"]).overlay(comingSoonOverlay)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(true)
-                        }
-                    }
                 }
             }
-            .navigationTitle("Games")
-            .toolbarColorScheme(.dark, for: .navigationBar)
         }
     }
 
-    private var comingSoonOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25)
-            Text("Coming soon")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(6)
-                .background(Color.black.opacity(0.4))
-                .clipShape(Capsule())
+    private var todayCard: some View {
+        CardDark {
+            Label("Today's activities", systemImage: "puzzlepiece.fill")
+                .font(.headline)
+                .foregroundStyle(AppTheme.primary)
+
+            Text(gamesDoneToday == 0
+                 ? "Play \(dailyGoal) short memory games today"
+                 : "Great! \(gamesDoneToday) of \(dailyGoal) memory games done")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            ProgressView(value: Double(gamesDoneToday), total: Double(dailyGoal))
+                .tint(AppTheme.primary)
+
+            Button { showStats = true } label: {
+                Label("See progress", systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(AppTheme.primary, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func fallbackEmoji(for title: String) -> String {
-        switch title {
-        case "Memory": return "🧠"
-        case "Attention": return "🔍"
-        case "Logic": return "🧩"
-        case "What Difference?": return "⚽️"
-        default: return "🎮"
-        }
-    }
+    private var gamesCard: some View {
+        CardDark {
+            Label("Train your memory", systemImage: "gamecontroller.fill")
+                .font(.headline)
+                .foregroundStyle(AppTheme.primary)
 
-    private func gameTileImage(title: String, imageCandidates: [String]) -> some View {
-        let ui: UIImage? = imageCandidates.compactMap { UIImage(named: $0) }.first
-        return Group {
-            if let ui {
-                Image(uiImage: ui)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                gameTile(title: title, emoji: fallbackEmoji(for: title), accent: .white)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                NavigationLink {
+                    GuessWhoGameView(state: state)
+                } label: {
+                    tile("game_memory")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Play Memory: guess who")
+
+                ForEach(upcoming, id: \.0) { image, title in
+                    tile(image)
+                        .overlay {
+                            Text("Coming soon")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.black.opacity(0.45), in: Capsule())
+                        }
+                        .saturation(0.4)
+                        .accessibilityElement()
+                        .accessibilityLabel("\(title), coming soon")
+                }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func gameTile(title: String, emoji: String, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(emoji)
-                .font(.largeTitle)
-            Spacer()
-            Text(title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.black)
-                .lineLimit(1)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .background(Color.white.opacity(0.92))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    private func tile(_ image: String) -> some View {
+        Image(image)
+            .resizable()
+            .scaledToFill()
+            .frame(minWidth: 0, maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
-
