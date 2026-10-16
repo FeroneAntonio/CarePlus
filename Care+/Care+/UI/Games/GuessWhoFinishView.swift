@@ -6,93 +6,68 @@
 import SwiftUI
 
 struct GuessWhoFinishView: View {
-    @Bindable var state: AppState
-
-    let durationSeconds: Int
-    let correctCount: Int
-    let totalRounds: Int
-    let totalAttempts: Int
-    let roundResults: [GuessWhoRoundResult]
-
+    let session: GameSessionResult
     let onRetry: () -> Void
     let onClose: () -> Void
 
+    private var message: String {
+        switch Double(session.correctCount) / Double(max(session.totalRounds, 1)) {
+        case 0.8...: return "Wonderful memory today!"
+        case 0.5..<0.8: return "Well done, keep it up."
+        default: return "Every game is good practice."
+        }
+    }
+
     var body: some View {
-        NavigationStack {
-            Screen {
-                CardDark {
-                    Text("Finished 🎉")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(.white)
+        VStack(spacing: 24) {
+            Spacer()
 
-                    Text("Score: \(correctCount)/\(totalRounds)")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
+            Image(systemName: "star.circle.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(AppTheme.warning)
 
-                    Text("Time: \(durationSeconds)s")
-                        .foregroundStyle(.white.opacity(0.8))
+            VStack(spacing: 6) {
+                Text("\(session.correctCount) of \(session.totalRounds)")
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(message)
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
 
-                    Text("Attempts: \(totalAttempts)")
-                        .foregroundStyle(.white.opacity(0.8))
-
-                    let avg = totalRounds > 0 ? Double(totalAttempts) / Double(totalRounds) : 0
-                    Text(String(format: "Avg attempts/round: %.2f", avg))
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-
-                CardDark {
-                    Text("Rounds")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-
-                    ForEach(roundResults, id: \.roundIndex) { r in
-                        HStack {
-                            Text("Round \(r.roundIndex + 1)")
-                                .foregroundStyle(.white)
-                            Spacer()
-                            Text(r.isCorrect ? "✅" : "❌")
-                            Text("tries: \(r.attempts)")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        .padding(10)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                }
-
-                HStack(spacing: 10) {
-                    Button {
-                        onRetry()
-                    } label: {
-                        Text("RETRY")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 56)
-                            .background(Color.white)
-                            .foregroundStyle(.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-
-                    Button {
-                        onClose()
-                    } label: {
-                        Text("CLOSE")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 56)
-                            .background(Color.white.opacity(0.18))
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18)
-                                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                            )
-                    }
+            HStack(spacing: 8) {
+                ForEach(session.roundResults, id: \.roundIndex) { round in
+                    Image(systemName: round.isCorrect ? "checkmark.circle.fill" : "arrow.uturn.left.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(round.isCorrect ? AppTheme.success : AppTheme.warning)
                 }
             }
-            .navigationTitle("Results")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(session.correctCount) correct out of \(session.totalRounds)")
+
+            Text("\(session.durationSeconds) seconds · \(session.totalAttempts) attempts")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.textSecondary)
+
+            Spacer()
+
+            VStack(spacing: 12) {
+                Button(action: onRetry) {
+                    Text("Play again")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                        .background(AppTheme.primary, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                Button("Close", action: onClose)
+                    .font(.headline)
+                    .frame(minHeight: 44)
+                    .foregroundStyle(AppTheme.primary)
+            }
+            .buttonStyle(.plain)
         }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.background.ignoresSafeArea())
     }
 }

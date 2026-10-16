@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ChatBubble: View {
     let message: ChatMessage
-    @Environment(\.colorScheme) private var scheme
 
     private var isUser: Bool { message.isFromCurrentUser }
 

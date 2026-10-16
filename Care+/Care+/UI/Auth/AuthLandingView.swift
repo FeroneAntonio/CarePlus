@@ -42,7 +42,7 @@ struct AuthLandingView: View {
                 // MARK: - Actions
                 VStack(spacing: 12) {
 
-                    // ✅ Login (full width)
+                    // Login (full width)
                     AuthPrimaryCTA(
                         title: "Login",
                         fill: AppTheme.primary
@@ -50,14 +50,14 @@ struct AuthLandingView: View {
                         showLogin = true
                     }
 
-                    // ✅ Create Account (full width)
+                    // Create Account (full width)
                     AuthSecondaryCTA(
                         title: "Create Account"
                     ) {
                         showSignUpFlow = true
                     }
 
-                    // ✅ Continue as Guest
+                    // Continue as Guest
                     Button {
                         state.setGuest(true)
                     } label: {

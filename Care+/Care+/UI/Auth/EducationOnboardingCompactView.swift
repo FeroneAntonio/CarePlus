@@ -3,69 +3,83 @@ import SwiftUI
 struct EducationOnboardingCompactView: View {
     @Bindable var state: AppState
 
+    private let topics: [(icon: String, title: String, text: String)] = [
+        ("brain.head.profile", "What is dementia?",
+         "A group of symptoms that affect memory, thinking and social abilities. Alzheimer's is its most common cause."),
+        ("person.2.fill", "Made for two",
+         "Care+ connects a patient and a caregiver, so daily care is shared instead of carried alone."),
+        ("pills.fill", "Tasks & medication",
+         "Plan the day, track doses and the home medicine cabinet, with gentle reminders."),
+        ("book.closed.fill", "Daily diary",
+         "Keep moments with text, photos, video or voice, and look back at them together."),
+        ("phone.fill", "People close by",
+         "Call loved ones in one tap, hear their recorded voice, and reach an SOS contact fast."),
+        ("puzzlepiece.fill", "Memory games",
+         "Short games built around familiar faces, with progress the caregiver can follow."),
+    ]
+
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                AppBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        infoCard(title: "What is dementia and Alzheimer’s?", text: "Dementia is a group of symptoms that affect memory, thinking, and social abilities. Alzheimer’s is the most common cause of dementia.")
-
-                        infoCard(title: "How Care+ helps", text: "Stay on top of daily life with reminders and simple tools. Care+ supports both patients and caregivers.")
-
-                        infoCard(title: "Tasks & medication reminders", text: "Create tasks and medication schedules. Get gentle notifications to remember important things.")
-
-                        infoCard(title: "Daily diary", text: "Capture moments with text, photos, videos, or voice notes. Look back at your day easily.")
-
-                        infoCard(title: "Contacts & quick calls", text: "Keep important people close. Call them quickly from the app.")
-
-                        infoCard(title: "Memory exercises", text: "Practice simple games designed to support memory and attention.")
-
-                        infoCard(title: "Caregiver support", text: "Caregivers can help organize tasks, track progress, and stay connected with the patient.")
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 40)
-                    .padding(.bottom, 120)
-                }
-
-                HStack(spacing: 12) {
-                    Button("Skip") { complete() }
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(AppTheme.surface)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Image("logonome")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 72)
+                        .accessibilityHidden(true)
+                    Text("Welcome to Care+")
+                        .font(.largeTitle.bold())
                         .foregroundStyle(AppTheme.textPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                    Button("Continue") { complete() }
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(AppTheme.primary)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    Text("A calm, shared space for people living with Alzheimer's and those who care for them.")
+                        .font(.body)
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(16)
-                .background(LinearGradient(colors: [AppTheme.background.opacity(0.0), AppTheme.background], startPoint: .top, endPoint: .bottom))
+
+                VStack(spacing: 12) {
+                    ForEach(topics, id: \.title) { topic in
+                        HStack(alignment: .top, spacing: 14) {
+                            Image(systemName: topic.icon)
+                                .font(.title3)
+                                .foregroundStyle(AppTheme.primary)
+                                .frame(width: 44, height: 44)
+                                .background(AppTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(topic.title)
+                                    .font(.headline)
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Text(topic.text)
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+
+                Text("Care+ supports daily life. It is not a medical device and does not replace your doctor.")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
-            .navigationTitle("")
-            .toolbarTitleDisplayMode(.inline)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
         }
-    }
-
-    private func complete() {
-        state.setEducationSeen()
-    }
-
-    private func infoCard(title: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.textSecondary)
+        .safeAreaInset(edge: .bottom) {
+            Button { state.setEducationSeen() } label: {
+                Text("Get started")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(AppTheme.primary, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.bar)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(AppTheme.background.ignoresSafeArea())
     }
 }
-

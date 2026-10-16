@@ -24,15 +24,8 @@ struct DiaryView: View {
     @State private var entryToDelete: DiaryEntry?
     @State private var showDeleteEntryConfirm = false
 
-    // ✅ Header (same as Hub / Tasks)
-    @State private var showAccount = false
-    @State private var showSettings = false
-    @State private var showMenu = false
+    // Header (same as Hub / Tasks)
 
-    // ✅ Same header colors as TasksTabView (kept)
-    private var textPrimary: Color { scheme == .dark ? .white : AppTheme.iconLight }
-    private var textSecondary: Color { scheme == .dark ? .white.opacity(0.75) : AppTheme.iconLight.opacity(0.70) }
-    private var iconColor: Color { scheme == .dark ? .white : AppTheme.iconLight }
 
     private var canAddEntry: Bool {
         Validators.nonEmpty(text)
@@ -46,11 +39,11 @@ struct DiaryView: View {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
-                // ✅ Same container logic as Home (one single horizontal padding)
+                // Same container logic as Home (one single horizontal padding)
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 10) {
 
-                        header
+                        TabHeader(state: state, title: "Diary")
 
                         VStack(spacing: 10) {
 
@@ -58,8 +51,6 @@ struct DiaryView: View {
                             CardDark {
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack(spacing: 10) {
-                                        Color.clear
-                                            .frame(width: 20, height: 20)
                                         Text("How was your day?")
                                             .font(.title3.weight(.bold))
                                             .foregroundStyle(AppTheme.textPrimary)
@@ -289,21 +280,15 @@ struct DiaryView: View {
                             Spacer(minLength: 140)
                         }
                     }
-                    .padding(.horizontal, 18) // ✅ matches Home
-                    .padding(.top, 12)        // ✅ matches Home
+                    .padding(.horizontal, 18) // matches Home
+                    .padding(.top, 12)        // matches Home
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
 
-            // ✅ Header sheets (Account / Settings)
-            .sheet(isPresented: $showAccount) {
-                AccountView(state: state)
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView(state: state)
-            }
+            // Header sheets (Account / Settings)
 
             .alert("Delete this entry?", isPresented: $showDeleteEntryConfirm) {
                 Button("Delete", role: .destructive) {
@@ -342,40 +327,6 @@ struct DiaryView: View {
         }
     }
 
-    // MARK: - Header (same as Hub / Tasks)
-    private var header: some View {
-        ZStack {
-            HStack(spacing: 10) {
-                Button { showAccount = true } label: {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button { showMenu = true } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Text("Diary")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppTheme.primary)
-        }
-        .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .visible) {
-            Button("Settings") { showSettings = true }
-        }
-        .padding(.bottom, 6)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Diary header")
-    }
 
     // MARK: - UI helpers
     private func moodButton(title: String, icon: String, mood: Mood) -> some View {
@@ -404,7 +355,7 @@ struct DiaryView: View {
                     .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? AppTheme.textPrimary : AppTheme.textSecondary)
-            .frame(width: 104, height: 86)
+            .frame(maxWidth: .infinity, minHeight: 86)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(isSelected ? AppTheme.primary.opacity(0.16) : AppTheme.surface)

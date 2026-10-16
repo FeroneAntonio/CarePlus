@@ -8,7 +8,6 @@ struct ContactsDesignView: View {
     @StateObject private var audioPlayer = AudioPlayer()
     @State private var showAddContactSheet = false
     @State private var editingContact: ContactItem? = nil
-    @State private var isEditingPresented: Bool = false
     @State private var playingURL: URL? = nil
     @State private var recordingContactID: UUID? = nil
     @State private var isRecordingSheetPresented: Bool = false
@@ -16,14 +15,9 @@ struct ContactsDesignView: View {
     @State private var photoPickerContactID: UUID? = nil
     @State private var photoPickerItem: PhotosPickerItem? = nil
 
-    private enum PickerContext { case doctor, caregiver, family }
+    enum PickerContext { case doctor, caregiver, family }
     @State private var pickerContext: PickerContext? = nil
     @State private var showContactPicker: Bool = false
-
-    @Environment(\.colorScheme) private var scheme
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
-    private var iconColor: Color { AppTheme.primary }
 
     private var doctorContact: ContactItem? {
         state.contacts.first(where: { $0.isDoctor })
@@ -33,48 +27,36 @@ struct ContactsDesignView: View {
         state.contacts.filter { $0.isCaregiver }
     }
 
-    private var familyContacts: [ContactItem] {
-        let filtered = state.contacts.filter { contact in
-            let r = (contact.relation ?? "").lowercased()
-            return !contact.isCaregiver && !contact.isDoctor &&
-                   (r.contains("family") || r.contains("daughter") || r.contains("son"))
-        }
-        if !filtered.isEmpty {
-            return filtered
-        } else {
-            // fallback: all non-caregiver and non-doctor contacts
-            return state.contacts.filter { contact in
-                let r = (contact.relation ?? "").lowercased()
-                return !r.contains("caregiver") && !r.contains("doctor")
-            }
-        }
+    /// Everyone who is not the doctor or a caregiver.
+    private var otherContacts: [ContactItem] {
+        state.contacts.filter { !$0.isCaregiver && !$0.isDoctor }
     }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    emergencyCardSection
+                    TabHeader(state: state, title: "Contacts")
 
-                    Text("Contacts: \(state.contacts.count)")
-                        .font(.caption)
-                        .foregroundStyle(textSecondary)
+                    emergencyCardSection
 
                     if state.contacts.isEmpty {
                         importButton
                     }
 
-                    doctorSection
+                    roleSection("Doctor", icon: "stethoscope", contact: doctorContact, picker: .doctor)
 
-                    primaryCaregiverSection
+                    roleSection("Caregiver", icon: "person.2.fill", contact: caregiverContacts.first, picker: .caregiver)
 
-                    contactSection(title: "Family", icon: "heart.fill", contacts: familyContacts)
+                    contactSection(title: "Family & friends", icon: "heart.fill", contacts: otherContacts)
 
-                    addNewContactButton.padding(.top, 10)
+                    addNewContactButton
                     Spacer(minLength: 120)
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
             }
-            .padding()
+            .background(AppTheme.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showAddContactSheet) {
                 AddContactView(state: state, onAdd: { newContact in
@@ -247,60 +229,23 @@ private extension ContactsDesignView {
         }
     }
 
-    var topBar: some View {
-        HStack {
-            NavigationLink {
-                SettingsView(state: state)
-            } label: {
-                Image(systemName: "person.crop.circle")
-                    .font(.title)
-                    .foregroundStyle(.white)
-                    .padding(.leading, 10)
-            }
-
-            Spacer()
-
-            Image(systemName: "brain.head.profile")
-                .font(.title2.bold())
-                .foregroundStyle(.white)
-
-            Spacer()
-
-            Button(action: {
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
-            }, label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.trailing, 10)
-            })
-        }
-        .padding(.vertical, 6)
-    }
-
     var emergencyCardSection: some View {
         CardDark {
             VStack(alignment: .leading, spacing: 15) {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack {
-                        Image(systemName: "phone.bubble.left.fill")
-                            .font(.headline)
-                            .foregroundStyle(iconColor)
-                        Text("Contacts")
-                            .font(.headline)
-                            .foregroundStyle(iconColor)
-                    }
-                    Text("Emergency SOS")
+                    Label("Emergency SOS", systemImage: "sos.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.danger)
+                    Text("One tap to call for help")
                         .font(.caption)
-                        .foregroundStyle(textSecondary)
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
 
                 if let sos = state.sosContact {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(sos.name).font(.title2.bold()).foregroundStyle(textPrimary)
-                            Text(sos.relation ?? "Primary Emergency Contact").font(.caption).foregroundStyle(textSecondary)
+                            Text(sos.name).font(.title2.bold()).foregroundStyle(AppTheme.textPrimary)
+                            Text(sos.relation ?? "Primary Emergency Contact").font(.caption).foregroundStyle(AppTheme.textSecondary)
                         }
                         Spacer()
                         Button {
@@ -310,21 +255,18 @@ private extension ContactsDesignView {
                                 .font(.title.bold())
                                 .foregroundStyle(.white)
                                 .frame(width: 70, height: 70)
-                                .background(Circle().fill(AppTheme.warning))
+                                .accessibilityLabel("Call \(sos.name)")
+                                .background(Circle().fill(AppTheme.danger))
                         }
                     }
                 } else {
-                    HStack {
-                        Spacer()
-                        plusCircleButton {
-                            // Open add contact sheet or just haptic feedback
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
-                            showAddContactSheet = true
-                        }
-                        Spacer()
+                    Button { showAddContactSheet = true } label: {
+                        Label("Add an emergency contact", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.primary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .padding(.vertical, 15)
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -350,7 +292,6 @@ private extension ContactsDesignView {
                     state.contacts.append(contentsOf: toAppend)
                     state.saveContacts()
                 }
-                print("Imported contacts count: \(state.contacts.count)")
             }
         } label: {
             Label("Import from device", systemImage: "arrow.down.doc.fill")
@@ -363,314 +304,164 @@ private extension ContactsDesignView {
     func contactSection(title: String, icon: String, contacts: [ContactItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label(title, systemImage: icon)
-                    .font(.headline)
-                    .foregroundStyle(iconColor)
+                sectionLabel(title, icon: icon)
                 Spacer()
                 Button {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
                     pickerContext = .family
                     showContactPicker = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(iconColor)
+                        .foregroundStyle(AppTheme.primary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Add to \(title)")
             }
-            .padding(.horizontal, 5)
             CardDark {
                 if contacts.isEmpty {
-                    Text("No \(title.lowercased()) yet.")
+                    Text("No contacts yet.")
                         .font(.subheadline)
-                        .foregroundStyle(textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(15)
+                        .foregroundStyle(AppTheme.textSecondary)
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(contacts.enumerated()), id: \.element.id) { idx, contact in
-                            contactRow(contact)
-                            if idx < contacts.count - 1 {
-                                Divider().background(Color.white.opacity(0.1)).padding(.vertical, 10)
-                            }
-                        }
+                    ForEach(contacts) { contact in
+                        contactRow(contact)
+                        if contact.id != contacts.last?.id { Divider() }
                     }
                 }
             }
         }
     }
 
-    var caregiverSection: some View {
-        contactSection(title: "Caregiver", icon: "staroflife.fill", contacts: caregiverContacts)
-    }
-
-    var doctorSection: some View {
+    /// Single-contact section (doctor / caregiver) with an empty state that opens the picker.
+    func roleSection(_ title: String, icon: String, contact: ContactItem?, picker: PickerContext) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Doctor")
-                    .font(.headline)
-                    .foregroundStyle(iconColor)
-                Spacer()
-            }
-            .padding(.horizontal, 5)
+            sectionLabel(title, icon: icon)
             CardDark {
-                if let doctor = doctorContact {
-                    contactRow(doctor)
+                if let contact {
+                    contactRow(contact)
                 } else {
-                    VStack(spacing: 10) {
-                        Text("No doctor selected.")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textOnDarkSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 12)
-
-                        HStack {
-                            Spacer()
-                            plusCircleButton {
-                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                generator.impactOccurred()
-                                pickerContext = .doctor
-                                showContactPicker = true
-                            }
-                            Spacer()
-                        }
-                        .padding(.bottom, 12)
+                    Button {
+                        pickerContext = picker
+                        showContactPicker = true
+                    } label: {
+                        Label("Choose a \(title.lowercased())", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.primary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    var primaryCaregiverSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Caregiver")
-                    .font(.headline)
-                    .foregroundStyle(iconColor)
-                Spacer()
-            }
-            .padding(.horizontal, 5)
-            CardDark {
-                if let primary = caregiverContacts.first {
-                    contactRow(primary)
-                } else {
-                    VStack(spacing: 10) {
-                        Text("No caregiver selected.")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textOnDarkSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 12)
-
-                        HStack {
-                            Spacer()
-                            plusCircleButton {
-                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                generator.impactOccurred()
-                                pickerContext = .caregiver
-                                showContactPicker = true
-                            }
-                            Spacer()
-                        }
-                        .padding(.bottom, 12)
-                    }
-                }
-            }
-        }
+    func sectionLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.headline)
+            .foregroundStyle(AppTheme.primary)
+            .padding(.horizontal, 4)
     }
 
     func contactRow(_ contact: ContactItem) -> some View {
-        Button(action: {
-            editingContact = contact
-        }, label: {
-            HStack(spacing: 15) {
-                Avatar(photo: contact.photoData)
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(contact.name).font(.headline).foregroundStyle(textPrimary)
-                            Text(contact.relation ?? "").font(.caption).foregroundStyle(textSecondary)
-                        }
-                        Spacer()
-                        Menu {
-                            Button { setPrimaryCaregiver(contact) } label: { Label("Set as Caregiver", systemImage: "person.2.fill") }
-                            Button { setPrimaryDoctor(contact) } label: { Label("Set as Doctor", systemImage: "stethoscope") }
-                            Button { state.setSOSContact(contact) } label: { Label("Set as Emergency SOS", systemImage: "star.fill") }
-                            Button {
-                                photoPickerContactID = contact.id
-                                showPhotoPicker = true
-                            } label: { Label("Add/Change photo", systemImage: "photo") }
-                            Button { recordingContactID = contact.id; isRecordingSheetPresented = true } label: { Label("Record voice", systemImage: "mic.fill") }
-                            if contact.audioNoteURL != nil {
-                                Button(role: .destructive) {
-                                    if let idx = state.contacts.firstIndex(where: { $0.id == contact.id }) {
-                                        state.contacts[idx].audioNoteURL = nil
-                                        state.saveContacts()
-                                    }
-                                } label: { Label("Remove voice", systemImage: "trash") }
-                            }
-                            Button { editingContact = contact } label: { Label("Edit", systemImage: "pencil") }
-                            Button(role: .destructive) { state.contacts.removeAll { $0.id == contact.id }; state.saveContacts() } label: { Label("Delete", systemImage: "trash") }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .foregroundStyle(AppTheme.primary)
-                                .padding(8)
+        let isPlaying = contact.audioNoteURL != nil && playingURL == contact.audioNoteURL
+
+        return HStack(spacing: 14) {
+            Button { editingContact = contact } label: {
+                HStack(spacing: 14) {
+                    Avatar(photo: contact.photoData)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(contact.name)
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        if let relation = contact.relation, !relation.isEmpty {
+                            Text(relation)
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.textSecondary)
                         }
                     }
-                    Button(action: {
-                        CallHelper.call(contact: contact, state: state)
-                    }, label: {
-                        Label("Call", systemImage: "phone.fill")
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.success)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
-                    })
-                    Button {
-                        if let url = contact.audioNoteURL {
-                            if playingURL == url {
-                                audioPlayer.stop()
-                                playingURL = nil
-                            } else {
-                                audioPlayer.play(url: url)
-                                playingURL = url
-                            }
-                        }
-                    } label: {
-                        Label("Listen voice", systemImage: playingURL == contact.audioNoteURL ? "stop.fill" : "speaker.wave.2.fill")
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.primary)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let url = contact.audioNoteURL {
+                circleButton(isPlaying ? "stop.fill" : "waveform", tint: AppTheme.primary, label: "Play voice of \(contact.name)") {
+                    if isPlaying {
+                        audioPlayer.stop()
+                        playingURL = nil
+                    } else {
+                        audioPlayer.play(url: url)
+                        playingURL = url
                     }
-                    .disabled(contact.audioNoteURL == nil)
-                    .opacity(contact.audioNoteURL == nil ? 0.4 : 1.0)
                 }
             }
-        })
+
+            circleButton("phone.fill", tint: AppTheme.success, label: "Call \(contact.name)") {
+                CallHelper.call(contact: contact, state: state)
+            }
+
+            Menu {
+                Button { setPrimaryCaregiver(contact) } label: { Label("Set as Caregiver", systemImage: "person.2.fill") }
+                Button { setPrimaryDoctor(contact) } label: { Label("Set as Doctor", systemImage: "stethoscope") }
+                Button { state.setSOSContact(contact) } label: { Label("Set as Emergency SOS", systemImage: "star.fill") }
+                Divider()
+                Button {
+                    photoPickerContactID = contact.id
+                    showPhotoPicker = true
+                } label: { Label("Change photo", systemImage: "photo") }
+                Button {
+                    recordingContactID = contact.id
+                    isRecordingSheetPresented = true
+                } label: { Label("Record voice", systemImage: "mic.fill") }
+                Button { editingContact = contact } label: { Label("Edit", systemImage: "pencil") }
+                Divider()
+                if contact.audioNoteURL != nil {
+                    Button(role: .destructive) {
+                        if let idx = state.contacts.firstIndex(where: { $0.id == contact.id }) {
+                            state.contacts[idx].audioNoteURL = nil
+                            state.saveContacts()
+                        }
+                    } label: { Label("Remove voice", systemImage: "waveform.slash") }
+                }
+                Button(role: .destructive) {
+                    state.contacts.removeAll { $0.id == contact.id }
+                    state.saveContacts()
+                } label: { Label("Delete", systemImage: "trash") }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.primary)
+                    .frame(width: 28, height: 44)
+            }
+            .accessibilityLabel("More actions for \(contact.name)")
+        }
+    }
+
+    func circleButton(_ systemImage: String, tint: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(tint))
+        }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     var addNewContactButton: some View {
-        Button(action: { showAddContactSheet = true }, label: {
-            HStack {
-                Image(systemName: "plus").font(.title2.weight(.bold))
-                Text("Add a new contact").font(.headline)
-                Spacer()
-            }
-            .padding()
-            .background(AppTheme.primary)
-            .foregroundStyle(.white)
-            .clipShape(Capsule())
-        })
-    }
-    
-    func plusCircleButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.headline.weight(.bold))
+        Button { showAddContactSheet = true } label: {
+            Label("Add a new contact", systemImage: "plus")
+                .font(.headline)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(AppTheme.primary, in: Capsule())
                 .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(AppTheme.primary)
-                .clipShape(Circle())
         }
         .buttonStyle(.plain)
-    }
-    
-    func voicePill(contact: ContactItem) -> some View {
-        let isPlaying = playingURL == contact.audioNoteURL
-
-        return Button {
-            guard let url = contact.audioNoteURL else { return }
-            if isPlaying {
-                audioPlayer.stop()
-                playingURL = nil
-            } else {
-                audioPlayer.stop()
-                audioPlayer.play(url: url)
-                playingURL = url
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(isPlaying ? AppTheme.primary : AppTheme.primary.opacity(0.85))
-                    .clipShape(Circle())
-
-                Text(contact.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(textPrimary)
-
-                Spacer()
-
-                if isPlaying {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(AppTheme.primary)
-                        .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-            .background(
-                Group {
-                    if scheme == .dark {
-                        Color.white.opacity(0.08)
-                    } else {
-                        AppTheme.surface.opacity(0.9)
-                    }
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        scheme == .dark ? Color.white.opacity(0.10) : AppTheme.primary.opacity(0.12),
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    var listenVoiceCard: some View {
-        CardDark {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Voice Notes")
-                    .font(.headline)
-                    .foregroundStyle(iconColor)
-                    .padding(.leading, 8)
-
-                if state.contacts.allSatisfy({ $0.audioNoteURL == nil }) {
-                    VStack {
-                        Text("No recordings available")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(textSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
-                            .padding(.top, 8)
-                        Spacer(minLength: 0)
-                    }
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(state.contacts.filter { $0.audioNoteURL != nil }, id: \.id) { contact in
-                                voicePill(contact: contact)
-                            }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
-                    }
-                }
-            }
-        }
     }
 }
 

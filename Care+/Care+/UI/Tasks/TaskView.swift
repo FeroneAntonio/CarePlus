@@ -21,15 +21,7 @@ struct TasksTabView: View {
     @StateObject private var taskAudioPlayer = AudioPlayer()
     @State private var playingTaskURL: URL? = nil
 
-    // ✅ Header (same as Hub)
-    @State private var showAccount = false
-    @State private var showSettings = false
-    @State private var showMenu = false
-
-    @Environment(\.colorScheme) private var scheme
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
-    private var iconColor: Color { AppTheme.primary }
+    // Header (same as Hub)
 
     // MARK: - Date helpers
     private var dayBounds: (start: Date, end: Date) {
@@ -69,11 +61,11 @@ struct TasksTabView: View {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
 
-                // ✅ Same container logic as Home/Diary:
+                // Same container logic as Home/Diary:
                 // one ScrollView + one horizontal padding (18) + top padding (12)
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 10) {
-                        header
+                        TabHeader(state: state, title: "Tasks")
 
                         addNewTaskButton
                         medicationCard
@@ -85,8 +77,8 @@ struct TasksTabView: View {
 
                         Spacer(minLength: 140)
                     }
-                    .padding(.horizontal, 18) // ✅ matches Home
-                    .padding(.top, 12)        // ✅ matches Home
+                    .padding(.horizontal, 18) // matches Home
+                    .padding(.top, 12)        // matches Home
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -107,13 +99,7 @@ struct TasksTabView: View {
                 MedicineInventoryView(state: state)
             }
 
-            // ✅ Header sheets (Account / Settings)
-            .sheet(isPresented: $showAccount) {
-                AccountView(state: state)
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView(state: state)
-            }
+            // Header sheets (Account / Settings)
 
             .alert("Delete this item?", isPresented: $showFirstDeleteConfirm) {
                 Button("Continue", role: .destructive) { showSecondDeleteConfirm = true }
@@ -143,39 +129,6 @@ struct TasksTabView: View {
 
 // MARK: - Header (same as Hub)
 private extension TasksTabView {
-    var header: some View {
-        ZStack {
-            HStack(spacing: 10) {
-                Button { showAccount = true } label: {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button { showMenu = true } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Text("Tasks")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppTheme.primary)
-        }
-        .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .visible) {
-            Button("Settings") { showSettings = true }
-        }
-        .padding(.bottom, 6)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Tasks header")
-    }
 }
 
 // MARK: - Cards
@@ -531,7 +484,7 @@ private extension TasksTabView {
                         .frame(width: 24, height: 24)
                     Image(systemName: isPlaying ? "stop.fill" : "play.fill")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(iconColor)
+                        .foregroundStyle(AppTheme.primary)
                         .padding(.leading, isPlaying ? 0 : 1)
                 }
                 if let title {
@@ -542,7 +495,7 @@ private extension TasksTabView {
             }
             .padding(.horizontal, title == nil ? 8 : 12)
             .frame(height: 34)
-            .background(iconColor)
+            .background(AppTheme.primary)
             .clipShape(Capsule())
             .shadow(color: Color.black.opacity(0.06), radius: 1, y: 1)
         }
@@ -586,14 +539,10 @@ private struct CreateTaskSheet: View {
 
     @State private var reminderEnabled: Bool = true
     @State private var reminderOffset: ReminderOffset = .five
-
-    @Environment(\.colorScheme) private var scheme
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
     private var controlBackground: Color { AppTheme.surface2 }
     private var controlBorder: Color { AppTheme.stroke }
     private var emphasisBackground: Color { AppTheme.primary }
-    private var emphasisForeground: Color { AppTheme.textOnSurfacePrimary }
+    private var emphasisForeground: Color { AppTheme.textPrimary }
 
     init(state: AppState, selectedDate: Date, prefillKind: TaskKind) {
         self.state = state
@@ -630,10 +579,10 @@ private struct CreateTaskSheet: View {
                             } label: {
                                 HStack {
                                     Text(kind == .event ? "Tasks" : "Medication")
-                                        .foregroundStyle(textPrimary)
+                                        .foregroundStyle(AppTheme.textPrimary)
                                     Spacer()
                                     Image(systemName: "chevron.down")
-                                        .foregroundStyle(textSecondary)
+                                        .foregroundStyle(AppTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 14)
                                 .frame(height: 44)
@@ -651,7 +600,7 @@ private struct CreateTaskSheet: View {
                                 .padding(.horizontal, 14)
                                 .frame(height: 44)
                                 .background(controlBackground)
-                                .foregroundStyle(textPrimary)
+                                .foregroundStyle(AppTheme.textPrimary)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
@@ -672,14 +621,14 @@ private struct CreateTaskSheet: View {
                                         .tint(AppTheme.primary)
                                     Spacer()
                                     Text(reminderEnabled ? "On" : "Off")
-                                        .foregroundStyle(reminderEnabled ? textPrimary.opacity(0.85) : textSecondary)
+                                        .foregroundStyle(reminderEnabled ? AppTheme.textPrimary.opacity(0.85) : AppTheme.textSecondary)
                                 }
 
                                 if reminderEnabled {
                                     HStack {
                                         Text("Before")
                                             .font(.caption.weight(.semibold))
-                                            .foregroundStyle(textSecondary)
+                                            .foregroundStyle(AppTheme.textSecondary)
                                         Spacer()
                                         Menu {
                                             ForEach(ReminderOffset.allCases) { opt in
@@ -688,9 +637,9 @@ private struct CreateTaskSheet: View {
                                         } label: {
                                             HStack(spacing: 6) {
                                                 Text(reminderOffset.title)
-                                                    .foregroundStyle(textPrimary)
+                                                    .foregroundStyle(AppTheme.textPrimary)
                                                 Image(systemName: "chevron.down")
-                                                    .foregroundStyle(textSecondary)
+                                                    .foregroundStyle(AppTheme.textSecondary)
                                             }
                                             .padding(.horizontal, 12)
                                             .frame(height: 36)
@@ -720,7 +669,7 @@ private struct CreateTaskSheet: View {
                                         .font(.headline.weight(.semibold))
                                         .frame(maxWidth: .infinity, minHeight: 48)
                                         .background(controlBackground)
-                                        .foregroundStyle(textPrimary)
+                                        .foregroundStyle(AppTheme.textPrimary)
                                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 18)
@@ -764,7 +713,7 @@ private struct CreateTaskSheet: View {
         HStack {
             Text(t)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(textSecondary)
+                .foregroundStyle(AppTheme.textSecondary)
             Spacer()
         }
     }
@@ -806,13 +755,11 @@ private struct CreateTaskSheet: View {
 
 // MARK: - Mini month calendar
 private struct MonthMiniCalendar: View {
-    @Environment(\.colorScheme) private var scheme
     @Binding var selectedDate: Date
     private var calendar: Calendar { .current }
 
     private var monthStart: Date {
-        let comps = calendar.dateComponents([.year, .month], from: selectedDate)
-        return calendar.date(from: comps) ?? selectedDate
+        calendar.dateInterval(of: .month, for: selectedDate)?.start ?? selectedDate
     }
 
     private var daysInMonth: Int {
@@ -820,63 +767,73 @@ private struct MonthMiniCalendar: View {
     }
 
     private var firstWeekdayOffset: Int {
-        let weekday = calendar.component(.weekday, from: monthStart)
-        let first = calendar.firstWeekday
-        return (weekday - first + 7) % 7
+        (calendar.component(.weekday, from: monthStart) - calendar.firstWeekday + 7) % 7
+    }
+
+    /// Very short weekday symbols, rotated to the locale's first weekday.
+    private var weekdaySymbols: [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let first = calendar.firstWeekday - 1
+        return Array(symbols[first...] + symbols[..<first])
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack {
-                Button { shiftMonth(-1) } label: {
-                    Image(systemName: "chevron.left")
-                        .foregroundStyle(Color.black.opacity(0.75))
-                }
-                .buttonStyle(.plain)
-
+                Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Previous month")
                 Spacer()
-
-                Text(monthStart.formatted(.dateTime.month()))
+                Text(monthStart.formatted(.dateTime.month(.wide)))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.black)
-
+                    .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
+                Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Next month")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AppTheme.primary)
 
-                Button { shiftMonth(1) } label: {
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(Color.black.opacity(0.75))
+            let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+            // Leading blanks + days of the month, as one identity space.
+            let cells: [Int?] = Array(repeating: nil, count: firstWeekdayOffset) + (1...daysInMonth).map { $0 }
+
+            LazyVGrid(columns: cols, spacing: 4) {
+                ForEach(weekdaySymbols.indices, id: \.self) { i in
+                    Text(weekdaySymbols[i])
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-                .buttonStyle(.plain)
             }
 
-            let cols = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
-            LazyVGrid(columns: cols, spacing: 6) {
-                let totalCells = firstWeekdayOffset + daysInMonth
-
-                ForEach(0..<totalCells, id: \.self) { index in
-                    if index < firstWeekdayOffset {
-                        Color.clear.frame(height: 22)
+            LazyVGrid(columns: cols, spacing: 4) {
+                ForEach(cells.indices, id: \.self) { i in
+                    if let day = cells[i] {
+                        dayButton(day)
                     } else {
-                        let day = index - firstWeekdayOffset + 1
-                        let date = dateForDay(day)
-                        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
-
-                        Button {
-                            selectedDate = date
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        } label: {
-                            Text("\(day)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(isSelected ? Color.black : Color.black.opacity(0.85))
-                                .frame(width: 26, height: 22)
-                                .background(isSelected ? Color(red: 0.953, green: 0.957, blue: 0.965) : Color.clear)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
+                        Color.clear.frame(height: 26)
                     }
                 }
             }
         }
+    }
+
+    private func dayButton(_ day: Int) -> some View {
+        let date = dateForDay(day)
+        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+        let isToday = calendar.isDateInToday(date)
+
+        return Button {
+            selectedDate = date
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Text("\(day)")
+                .font(.caption.weight(isSelected || isToday ? .bold : .medium))
+                .foregroundStyle(isSelected ? .white : isToday ? AppTheme.primary : AppTheme.textPrimary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(isSelected ? AppTheme.primary : .clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(date.formatted(date: .complete, time: .omitted))
     }
 
     private func dateForDay(_ day: Int) -> Date {

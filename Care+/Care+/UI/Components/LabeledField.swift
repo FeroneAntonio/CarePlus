@@ -19,13 +19,13 @@ struct LabeledField: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(AppTheme.textOnSurfaceSecondary)
+                .foregroundStyle(AppTheme.textSecondary)
 
             ZStack(alignment: .leading) {
                 // Placeholder
                 if text.isEmpty {
                     Text(placeholder)
-                        .foregroundStyle(AppTheme.textOnSurfaceSecondary.opacity(0.85))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.85))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
                 }
@@ -43,7 +43,7 @@ struct LabeledField: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(14)
-                .foregroundStyle(AppTheme.textOnSurfacePrimary)
+                .foregroundStyle(AppTheme.textPrimary)
                 .tint(AppTheme.primary)
             }
             .background(AppTheme.surface.opacity(0.92))

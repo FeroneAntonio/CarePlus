@@ -2,14 +2,9 @@ import SwiftUI
 import UIKit
 
 struct HomeDesignView: View {
-    @Environment(\.colorScheme) private var scheme
 
     @Bindable var state: AppState
     @Binding var selectedTab: AppTab
-
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
-    private var iconColor: Color { AppTheme.primary }
 
     // Listen voice
     @StateObject private var audioPlayer = AudioPlayer()
@@ -17,9 +12,6 @@ struct HomeDesignView: View {
 
     // Sheets / Menu
     @State private var showMedicalReport = false
-    @State private var showAccount = false
-    @State private var showSettings = false
-    @State private var showMenu = false
 
     #if DEBUG
     @State private var showAddCall = false
@@ -27,12 +19,25 @@ struct HomeDesignView: View {
 
     // Insights UI
     @State private var insightsPeriod: InsightsPeriod = .today
+    @State private var showAllRoutine = false
 
     // MARK: - Data helpers
 
-    private var firstName: String {
-        let displayName = state.careDataOwnerName ?? state.currentUser?.name ?? "there"
-        return displayName.split(separator: " ").first.map(String.init) ?? "there"
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: .now)
+        let part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
+        let name = (state.careDataOwnerName ?? state.currentUser?.name)?
+            .split(separator: " ").first.map(String.init)
+        return name.map { "\(part), \($0)" } ?? part
+    }
+
+    private var daySummary: String {
+        let left = todayTimelineItems.filter { !$0.isDone }.count
+        switch left {
+        case 0: return todayTimelineItems.isEmpty ? "Nothing planned for today." : "All done for today. Well done!"
+        case 1: return "1 activity left today."
+        default: return "\(left) activities left today."
+        }
     }
 
     private var dayBounds: (start: Date, end: Date) {
@@ -84,16 +89,8 @@ struct HomeDesignView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 16) {
-                        HubHeaderView(
-                            displayName: state.currentUser?.name ?? "",
-                            onAccountTap: { showAccount = true },
-                            onChatTap: { selectedTab = .chat },
-                            onMenuTap: { showMenu = true }
-                        )
-                        .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .visible) {
-                            Button("Settings") { showSettings = true }
+                        TabHeader(state: state, title: "Hub", onChat: { selectedTab = .chat }) {
                             Button("Medical report") { showMedicalReport = true }
-
                             #if DEBUG
                             Button("Log a Call") { showAddCall = true }
                             #endif
@@ -108,10 +105,10 @@ struct HomeDesignView: View {
 
                         eventsCard
 
-                        // ✅ Calls statistics preview card (same style as Routine)
+                        // Calls statistics preview card (same style as Routine)
                         callsStatsCard
 
-                        // ✅ NEW: Insights (Routine + Medication + Voice)
+                        // NEW: Insights (Routine + Medication + Voice)
                         insightsCard
 
                         Spacer(minLength: 120)
@@ -128,12 +125,6 @@ struct HomeDesignView: View {
         }
         .sheet(isPresented: $showMedicalReport) {
             MedicalReportView(state: state)
-        }
-        .sheet(isPresented: $showAccount) {
-            AccountView(state: state)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView(state: state)
         }
 
         #if DEBUG
@@ -167,13 +158,14 @@ private extension HomeDesignView {
                             .font(.title2.weight(.bold))
                             .foregroundStyle(AppTheme.textPrimary)
 
-                        Text("Good morning, \(firstName)")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.textSecondary)
-
-                        Text("Today is a sunny day!")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.textSecondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(greeting)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text(daySummary)
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
                     }
 
                     Spacer()
@@ -182,55 +174,6 @@ private extension HomeDesignView {
             .appCardStyle()
         }
         .background(AppTheme.background)
-    }
-}
-
-// MARK: - Header
-struct HubHeaderView: View {
-    @Environment(\.colorScheme) private var scheme
-
-    let displayName: String
-    let onAccountTap: () -> Void
-    let onChatTap: () -> Void
-    let onMenuTap: () -> Void
-
-    var body: some View {
-        ZStack {
-            HStack(spacing: 10) {
-                Button(action: onAccountTap) {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button(action: onChatTap) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 44, height: 44, alignment: .center)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open care chat")
-
-                Button(action: onMenuTap) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(AppTheme.primary)
-                        .frame(width: 28, height: 28, alignment: .center)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Text("Hub")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppTheme.primary)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Hub header")
     }
 }
 
@@ -257,6 +200,8 @@ private extension HomeDesignView {
                             Text(med.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
 
                             Text((med.scheduledAt?.formatted(.dateTime.hour().minute())) ?? "Anytime")
                                 .font(.caption2)
@@ -271,7 +216,7 @@ private extension HomeDesignView {
                                 state.tasks[idx].isDone.toggle()
                                 state.tasks[idx].updatedAt = .now
 
-                                // ✅ Track completion timestamp (used for On time / Delayed)
+                                // Track completion timestamp (used for On time / Delayed)
                                 if state.tasks[idx].isDone {
                                     setTaskCompletionDate(taskID: med.id, date: .now)
                                 } else {
@@ -314,18 +259,18 @@ private extension HomeDesignView {
                         Image(systemName: "speaker.wave.2.fill")
                             .font(.headline)
                             .foregroundStyle(AppTheme.primary)
-                        Text("Listen voice")
+                        Text("Voices")
                             .font(.headline.weight(.semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                         Spacer()
                     }
 
                     if voiceContacts.isEmpty {
-                        Text("No recordings available")
-                            .font(.subheadline.weight(.semibold))
+                        Text("Record a loved one's voice from Contacts.")
+                            .font(.subheadline)
                             .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, 8)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 4)
                         Spacer(minLength: 0)
                     } else {
                         VStack(spacing: 10) {
@@ -356,7 +301,7 @@ private extension HomeDesignView {
                 audioPlayer.play(url: url)
                 playingURL = url
 
-                // ✅ Track Voice Interaction event (user-initiated, observational)
+                // Track Voice Interaction event (user-initiated, observational)
                 logVoicePlay(contactKey: contact.uniqueKey, date: .now)
             }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -414,7 +359,7 @@ private extension HomeDesignView {
                             Image(systemName: "list.bullet")
                                 .font(.headline)
                                 .foregroundStyle(AppTheme.primary)
-                            Text(scheme == .dark ? "My Day" : "Routine")
+                            Text("Today")
                                 .font(.headline.weight(.semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
@@ -431,18 +376,21 @@ private extension HomeDesignView {
                             .padding(.bottom, 4)
                     } else {
                         VStack(spacing: 10) {
-                            ForEach(todayTimelineItems.prefix(2)) { e in
+                            ForEach(showAllRoutine ? todayTimelineItems : Array(todayTimelineItems.prefix(3))) { e in
                                 timelineRow(task: e)
                             }
                         }
                         .padding(.top, 10)
 
-                        Button(action: { /* no-op for now */ }) {
+                        if todayTimelineItems.count > 3 {
+                        Button {
+                            withAnimation(.snappy) { showAllRoutine.toggle() }
+                        } label: {
                             HStack(spacing: 6) {
-                                Text("Mostra altro")
+                                Text(showAllRoutine ? "Show less" : "Show all \(todayTimelineItems.count)")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundStyle(AppTheme.primary)
-                                Image(systemName: "chevron.down")
+                                Image(systemName: showAllRoutine ? "chevron.up" : "chevron.down")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundStyle(AppTheme.primary)
                             }
@@ -455,6 +403,7 @@ private extension HomeDesignView {
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 6)
+                        }
                     }
                 }
             }
@@ -473,7 +422,7 @@ private extension HomeDesignView {
                     state.tasks[idx].isDone.toggle()
                     state.tasks[idx].updatedAt = .now
 
-                    // ✅ Track completion timestamp (used for On time / Delayed)
+                    // Track completion timestamp (used for On time / Delayed)
                     if state.tasks[idx].isDone {
                         setTaskCompletionDate(taskID: task.id, date: .now)
                     } else {
@@ -499,9 +448,12 @@ private extension HomeDesignView {
                         .foregroundStyle(AppTheme.textSecondary)
                 }
 
-                Text(Date.now.formatted(.dateTime.weekday().month().day()))
-                    .font(.caption2)
-                    .foregroundStyle(AppTheme.textSecondary)
+                if let notes = task.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
@@ -577,7 +529,7 @@ private extension HomeDesignView {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
 
-                            Text("\(todayTotal) calls")
+                            Text(todayTotal == 1 ? "1 call" : "\(todayTotal) calls")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
 
@@ -840,68 +792,29 @@ private extension HomeDesignView {
 
     // MARK: Computations
 
+    /// Share (0–100) of tasks scheduled in [from, to) that are completed.
+    func completionRate(from: Date, to: Date) -> Int {
+        let items = state.tasks.filter { $0.scheduledAt.map { $0 >= from && $0 < to } ?? false }
+        guard !items.isEmpty else { return 0 }
+        return items.filter(\.isDone).count * 100 / items.count
+    }
+
+    func dayStart(_ offset: Int) -> Date {
+        let cal = Calendar.current
+        return cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: .now)) ?? .now
+    }
+
     func computeRoutineCompletion(period: InsightsPeriod) -> PercentageMetric {
-        let days = period.days
-        let cal = Calendar.current
-        let end = Date.now
-        let start = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: end)) ?? end
+        let tomorrow = dayStart(1)
+        let value = completionRate(from: dayStart(-(period.days - 1)), to: tomorrow)
+        let last7 = completionRate(from: dayStart(-6), to: tomorrow)
+        let previous7 = completionRate(from: dayStart(-13), to: dayStart(-6))
 
-        let inRange = state.tasks.filter { t in
-            guard let d = t.scheduledAt else { return false }
-            return d >= start && d <= end
-        }
-        let routine = inRange.filter { $0.kind == .event || $0.kind == .medication }
-
-        let scheduled = routine.count
-        let completed = routine.filter(\.isDone).count
-
-        let value = Int((Double(completed) / Double(max(scheduled, 1))) * 100.0)
-
-        // Weekly average and trend only makes sense when looking at today/7d/30d:
-        // - avg: average over the selected window (computed as same value for now, but we keep hook)
-        // - trend: compare last 7 days vs previous 7 days (only if enough horizon)
-        let avg: Int? = (period == .today) ? computeRoutineAverageLastNDays(days: 7) : nil
-        let trend: Int? = (period == .today || period == .last7) ? computeRoutineTrendDelta7d() : nil
-
-        return .init(value: value, avg: avg, trendDelta: trend)
-    }
-
-    func computeRoutineAverageLastNDays(days: Int) -> Int {
-        let cal = Calendar.current
-        let end = Date.now
-        let start = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: end)) ?? end
-
-        let inRange = state.tasks.filter { t in
-            guard let d = t.scheduledAt else { return false }
-            return d >= start && d <= end
-        }
-        let routine = inRange.filter { $0.kind == .event || $0.kind == .medication }
-        let scheduled = routine.count
-        let completed = routine.filter(\.isDone).count
-        return Int((Double(completed) / Double(max(scheduled, 1))) * 100.0)
-    }
-
-    func computeRoutineTrendDelta7d() -> Int {
-        let cal = Calendar.current
-        let end = Date.now
-        let startThis = cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: end)) ?? end
-        let endPrev = cal.date(byAdding: .day, value: -7, to: cal.startOfDay(for: end)) ?? end
-        let startPrev = cal.date(byAdding: .day, value: -13, to: cal.startOfDay(for: end)) ?? end
-
-        func rate(from: Date, to: Date) -> Int {
-            let inRange = state.tasks.filter { t in
-                guard let d = t.scheduledAt else { return false }
-                return d >= from && d <= to
-            }
-            let routine = inRange.filter { $0.kind == .event || $0.kind == .medication }
-            let scheduled = routine.count
-            let completed = routine.filter(\.isDone).count
-            return Int((Double(completed) / Double(max(scheduled, 1))) * 100.0)
-        }
-
-        let this7 = rate(from: startThis, to: end)
-        let prev7 = rate(from: startPrev, to: endPrev)
-        return this7 - prev7
+        return .init(
+            value: value,
+            avg: period == .today ? last7 : nil,
+            trendDelta: period.days <= 7 ? last7 - previous7 : nil
+        )
     }
 
     func computeMedicationAdherence(period: InsightsPeriod) -> MedicationMetric {
@@ -910,9 +823,10 @@ private extension HomeDesignView {
         let now = Date.now
         let start = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: now)) ?? now
 
+        // Doses that are due by now, plus any taken early.
         let meds = state.tasks.filter { t in
-            guard let d = t.scheduledAt else { return false }
-            return t.kind == .medication && d >= start && d <= now
+            guard let d = t.scheduledAt, t.kind == .medication, d >= start else { return false }
+            return d <= now || t.isDone
         }
 
         let scheduled = meds.count
@@ -1066,15 +980,4 @@ private extension HomeDesignView {
 
 // MARK: - Small helpers
 private extension HomeDesignView {
-    func plusCircleButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .frame(width: 34, height: 34)
-                .background(AppTheme.primary)
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-    }
 }

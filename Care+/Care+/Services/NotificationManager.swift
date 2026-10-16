@@ -25,11 +25,11 @@ enum ReminderOffset: Int, CaseIterable, Identifiable {
 final class NotificationManager: NSObject {
 
     private static let calmingPhrases: [String] = [
-        "Make a deep breath, you are okay.",
-        "Stay chill grandpa u are fine",
-        "Take a moment for your self and take a nap if you need one.",
-        "Remember your family loves you a lot. You are not alone.",
-        "Take a cup of water you are safe"
+        "Take a slow, deep breath. You are safe.",
+        "Everything is fine. Take a moment just for you.",
+        "Rest a little if you feel tired.",
+        "Your family loves you. You are not alone.",
+        "Have a glass of water and relax for a minute."
     ]
 
     private static let categoryId = "CALL_REMINDER_CATEGORY"
@@ -171,8 +171,8 @@ final class NotificationManager: NSObject {
 
         for i in 0..<max(1, count) {
             let content = UNMutableNotificationContent()
-            content.title = "Relax"
-            content.body = calmingPhrases.randomElement() ?? "Make a deep breath."
+            content.title = "A calm moment"
+            content.body = calmingPhrases.randomElement() ?? "Take a slow, deep breath."
             content.sound = .default
 
             let minutesFromNow = startNow ? (1 + i * interval) : ((i + 1) * interval)
@@ -183,11 +183,12 @@ final class NotificationManager: NSObject {
         }
     }
 
-    static func cancelCalmingReminders() {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            let ids = requests.filter { $0.identifier.hasPrefix("calming_") }.map { $0.identifier }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
-        }
+    static func cancelCalmingReminders() async {
+        let center = UNUserNotificationCenter.current()
+        let ids = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix("calming_") }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     // MARK: - Delegate

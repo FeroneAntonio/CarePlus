@@ -20,12 +20,14 @@ The app provides a shared digital environment where daily care activities can be
 
 ## ✨ Key Features
 
-- 🗂 Task and medication management  
+- 🗂 Task and medication management, with daily routine and adherence insights
 - 💊 Home medicine cabinet with stock, purpose, storage location and expiry alerts
-- 📔 Personal diary (text, images, audio, and video)  
+- 📔 Personal diary (text, images, audio, and video) with daily mood
+- 🧠 "Who is this?" memory game built on the patient's own contacts, with progress charts
 - 💬 Persistent patient-caregiver chat
-- 📞 Contact and call management  
-- 🌗 Light and dark mode support  
+- 📞 Contacts with one-tap calls, recorded voices and an SOS contact
+- 📄 Medical report import (PDF or text) that turns "Medication:" / "Task:" lines into reminders
+- 🌗 Light and dark mode, Dynamic Type and VoiceOver labels
 
 ---
 
@@ -60,6 +62,10 @@ Setup:
 2. In the Xcode scheme, add `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` under **Run → Arguments → Environment Variables**. For an archived app, provide the same keys through its generated Info.plist/build configuration.
 3. Run `supabase/migrations/202609100001_careplus_core.sql` once in the Supabase SQL editor.
 4. Build the `Care+` scheme on an iPhone simulator or device.
+
+### Demo data
+
+In a Debug build, add `CAREPLUS_DEMO_SEED=1` to the scheme's environment variables and tap **Continue as Guest**: the app opens with sample tasks, medicines, diary entries, contacts and game sessions. Useful for screenshots and quick reviews.
 
 To test the shared flow, create two email accounts. Choose **Patient** for one and **Caregiver** for the other, then enter the counterpart's email during setup on both accounts. The first request stays pending; the matching request from the other account activates the connection. The migration creates the required tables, profile trigger, consent-based link function and access policies.
 

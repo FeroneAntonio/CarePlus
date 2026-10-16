@@ -2,61 +2,35 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var state: AppState
-    @Environment(\.colorScheme) private var scheme
-    
-    private var textPrimary: Color { AppTheme.textPrimary }
-    private var textSecondary: Color { AppTheme.textSecondary }
-    private var iconColor: Color { AppTheme.primary }
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            Screen {
-                CardDark {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bell.badge.fill")
-                            .foregroundStyle(AppTheme.primary)
-                        Text("Calming reminders")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(AppTheme.primary)
-                    }
+            Form {
+                Section {
+                    Toggle("Calming reminders", isOn: Binding(
+                        get: { state.calmingRemindersEnabled },
+                        set: { state.setCalmingReminders(enabled: $0) }
+                    ))
 
-                    Toggle(
-                        "Enabled",
-                        isOn: Binding(
-                            get: { state.calmingRemindersEnabled },
-                            set: { state.setCalmingReminders(enabled: $0) }
-                        )
-                    )
-                    .foregroundStyle(textPrimary)
-                    .tint(AppTheme.primary)
-
-                    HStack {
-                        Text("Interval")
-                            .foregroundStyle(textPrimary)
-                        Spacer()
-
-                        // ✅ Allow 1-minute interval
-                        Stepper(
-                            value: Binding(
-                                get: { state.calmingIntervalMinutes },
-                                set: { state.setCalmingInterval(minutes: $0) }
-                            ),
-                            in: 1...120,
-                            step: 1
-                        ) {
-                            Text("\(state.calmingIntervalMinutes) min")
-                                .foregroundStyle(textPrimary)
+                    if state.calmingRemindersEnabled {
+                        Picker("Every", selection: Binding(
+                            get: { state.calmingIntervalMinutes },
+                            set: { state.setCalmingInterval(minutes: $0) }
+                        )) {
+                            ForEach(Set([10, 20, 30, 60, 120, state.calmingIntervalMinutes]).sorted(), id: \.self) { Text("\($0) min").tag($0) }
                         }
-                        .tint(AppTheme.primary)
                     }
-
-                    Text("We’ll send gentle reminders to calm and refocus.")
-                        .font(.footnote)
-                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Gentle messages that help to calm down and refocus during the day.")
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
         }
+        .tint(AppTheme.primary)
     }
 }
-

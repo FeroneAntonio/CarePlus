@@ -3,6 +3,12 @@ import SwiftUI
 @main
 struct Care_App: App {
     @State private var state = AppState()
+
+    init() {
+        #if DEBUG
+        DemoSeed.runIfNeeded()
+        #endif
+    }
     @StateObject private var appearance = AppearanceSettings()
 
     var body: some Scene {

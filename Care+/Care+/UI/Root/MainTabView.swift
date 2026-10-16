@@ -3,9 +3,8 @@ import SwiftUI
 struct MainTabView: View {
     @Bindable var state: AppState
     @State private var selectedTab: AppTab = .home
-    @State private var tabBarHeight: CGFloat = 0
 
-    /// ✅ memorizza l’ultima tab visitata che NON è chat
+    /// memorizza l’ultima tab visitata che NON è chat
     @State private var lastNonChatTab: AppTab = .home
 
     private func mapToBottom(_ tab: AppTab) -> BottomTab {
@@ -87,17 +86,14 @@ struct MainTabView: View {
                     get: { mapToBottom(selectedTab) },
                     set: { selectedTab = mapFromBottom($0) }
                 ))
-                .measureTabBarHeight()
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
-                .onPreferenceChange(TabBarHeightPreferenceKey.self) { h in tabBarHeight = h }
-                .frame(height: max(48, tabBarHeight))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeInOut(duration: 0.25), value: isChatActive)
                 .accessibilityHidden(false)
             }
         }
-        // ✅ aggiorna lastNonChatTab ogni volta che cambi tab (tranne chat)
+        // aggiorna lastNonChatTab ogni volta che cambi tab (tranne chat)
         .onChange(of: selectedTab) { _, newValue in
             if newValue != .chat {
                 lastNonChatTab = newValue

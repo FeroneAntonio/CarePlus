@@ -39,7 +39,7 @@ struct LoginFormView: View {
 
     var body: some View {
         ZStack {
-            // ✅ background coerente sempre, indipendente da AppBackground
+            // background coerente sempre, indipendente da AppBackground
             AppTheme.background.ignoresSafeArea()
 
             VStack(spacing: 16) {
@@ -118,7 +118,7 @@ struct LoginFormView: View {
                         }
                     }
 
-                    // ✅ bottone coerente con palette (usa PrimaryButton corretto)
+                    // bottone coerente con palette (usa PrimaryButton corretto)
                     PrimaryButton(isLoading ? "PLEASE WAIT…" : (mode == .login ? "CONTINUE" : "REGISTER"),
                                   style: .filled,
                                   color: AppTheme.primary,

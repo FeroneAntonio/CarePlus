@@ -19,7 +19,7 @@ struct ChatView: View {
 
             VStack(spacing: 12) {
 
-                // ✅ Custom top bar (no system navigation bar)
+                // Custom top bar (no system navigation bar)
                 HStack {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -113,10 +113,12 @@ struct ChatView: View {
                         } description: {
                             Text(error)
                         } actions: {
-                            Button("Try again") {
-                                Task { await vm.retry(state: state) }
+                            if state.sessionUserId != nil {
+                                Button("Try again") {
+                                    Task { await vm.retry(state: state) }
+                                }
+                                .buttonStyle(.borderedProminent)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     } else if vm.messages.isEmpty {
                         ContentUnavailableView(
